@@ -1,0 +1,25 @@
+# AGNES AI API 配置
+api_base: https://apihub.agnes-ai.com/v1
+api_key: ${AGNES_API_KEY}  # 或直接在.env中设置
+
+# 模型配置
+image_model: agnes-image-2.1-flash
+video_model: agnes-video-v2.0
+
+# 输出配置
+output_dir: ./output
+asset_dir: ./assets
+temp_dir: ./temp
+
+# 并发控制
+max_concurrent: 3
+request_delay: 2  # 秒，防限流
+
+# 视频规格
+target_resolution: 1080x1920  # 竖屏9:16
+video_duration: 5  # 秒（单段）
+fps: 25
+
+# TTS配置
+narrator_voice: zh-CN-YunyangNeural  # 男声旁白
+dialogue_voice: zh-CN-XiaoxiaoNeural  # 女声台词

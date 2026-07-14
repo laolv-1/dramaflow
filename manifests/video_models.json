@@ -1,0 +1,43 @@
+{
+  "version": "1.0",
+  "models": [
+    {
+      "model_id": "agnes-video-v2.0",
+      "provider": "agnes-ai",
+      "kind": "video",
+      "name": "Agnes Video V2.0",
+      "input_slots": {
+        "image_url": {"type": "string", "required": true, "description": "输入图片URL（AI生成的角色/场景图）"},
+        "image_upload": {"type": "file", "required": true, "description": "或上传本地图片文件"},
+        "prompt": {"type": "string", "required": false, "description": "运镜/动作描述（英文）"},
+        "duration": {"type": "integer", "default": 5, "description": "视频时长（秒）"},
+        "fps": {"type": "integer", "default": 25, "description": "帧率"}
+      },
+      "output": {
+        "format": "url",
+        "default_duration": 5,
+        "default_resolution": "1280x720",
+        "note": "模型原生输出横版720p，后期需转竖屏9:16"
+      },
+      "polling": {
+        "strategy": "poll",
+        "endpoint": "/videos/{task_id}",
+        "interval_seconds": 10,
+        "max_wait_seconds": 600
+      },
+      "pricing": {"type": "free_tier"}
+    },
+    {
+      "model_id": "free-video-model-1",
+      "provider": "placeholder",
+      "kind": "video",
+      "name": "免费视频模型（预留）",
+      "input_slots": {
+        "image_url": {"type": "string", "required": true},
+        "prompt": {"type": "string", "required": false}
+      },
+      "output": {"format": "url"},
+      "pricing": {"type": "free"}
+    }
+  ]
+}

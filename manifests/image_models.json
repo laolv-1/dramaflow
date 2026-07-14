@@ -1,0 +1,41 @@
+{
+  "version": "1.0",
+  "models": [
+    {
+      "model_id": "agnes-image-2.1-flash",
+      "provider": "agnes-ai",
+      "kind": "image",
+      "name": "Agnes Image 2.1 Flash",
+      "input_slots": {
+        "prompt": {"type": "string", "required": true, "description": "英文图片生成提示词"},
+        "negative_prompt": {"type": "string", "required": false, "description": "负面提示词"},
+        "size": {"type": "string", "enum": ["1K", "2K", "4K"], "default": "2K", "description": "输出尺寸"},
+        "style": {"type": "string", "required": false, "description": "风格预设"}
+      },
+      "output": {
+        "format": "url",
+        "supported_sizes": ["1024x1024", "1024x1536", "1536x1024", "2K", "4K"],
+        "note": "短剧推荐使用自定义竖屏1080x1920"
+      },
+      "pricing": {"type": "free_tier", "rate_limit": "unknown"}
+    },
+    {
+      "model_id": "free-image-model-1",
+      "provider": "placeholder",
+      "kind": "image",
+      "name": "免费图片模型（预留）",
+      "input_slots": {
+        "prompt": {"type": "string", "required": true},
+        "size": {"type": "string", "default": "1080x1920"}
+      },
+      "output": {"format": "url"},
+      "pricing": {"type": "free"}
+    }
+  ],
+  "image_sizes_for_short_drama": {
+    "character_portrait": "1080x1920",
+    "scene_wide": "1080x1920",
+    "close_up": "1080x1920",
+    "note": "短剧统一竖屏9:16"
+  }
+}
