@@ -1,138 +1,138 @@
 # DramaFlow
 
-> AI-powered short drama automation pipeline. From script to screen in one click.
+> AI驱动的短剧自动化流水线。从剧本到成片，一键完成。
 
-A lightweight, Manifest-driven CLI tool for automating AI-generated short drama production. Inspired by [AI-CanvasPro](https://github.com/ashuoAI/AI-CanvasPro), but simplified for personal use and learning.
+一个轻量级的 Manifest 驱动型命令行工具，用于自动化AI短剧生产。受 [AI-CanvasPro](https://github.com/ashuoAI/AI-CanvasPro) 启发，但简化为个人学习和自用版本。
 
-## Features
+## 功能特点
 
-- **Manifest-driven architecture**: Define AI models in JSON, add new providers without code changes
-- **Adapter pattern**: Unified interface for multiple AI providers (image/video/audio)
-- **Linear pipeline**: Script → Images → Videos → Audio → Synthesis
-- **Vertical video support**: 1080x1920 (9:16) optimized for TikTok/Reels/Shorts
-- **Free-first stack**: Edge TTS (free) + agnes-ai API + FFmpeg
-- **Virtual path abstraction**: Solves FFmpeg path resolution issues
-- **Atomic file naming**: `gen_YYYYMMDD_NNNN.mp4` format prevents filename collisions
-- **Dry-run mode**: Preview your pipeline before spending API credits
+- **Manifest驱动架构**：用JSON定义AI模型，新增服务商无需改代码
+- **适配器模式**：统一接口对接多个AI服务商（图片/视频/音频）
+- **线性流水线**：剧本 → 图片 → 视频 → 音频 → 合成
+- **竖屏视频支持**：1080x1920 (9:16)，专为抖音/快手/Shorts优化
+- **免费优先**：Edge TTS（免费）+ agnes-ai API + FFmpeg
+- **虚拟路径抽象**：彻底解决FFmpeg路径解析问题
+- **原子文件名**：`gen_YYYYMMDD_NNNN.mp4` 格式，天然防冲突
+- **预览模式**：跑正式流程前先预览，不消耗API额度
 
-## Architecture
+## 架构
 
 ```
-script/episode.json
+剧本/episode.json
     │
     ▼
-manifests/          ← AI model registry (JSON definitions)
+manifests/          ← AI模型注册表（JSON定义）
     │
     ▼
-adapters/           ← Provider adapters (agnes-ai, free alternatives...)
+adapters/           ← 适配器（agnes-ai、免费替代方案...）
     │
     ▼
-pipeline/           ← Linear execution: text → image → video → audio → synthesize
+pipeline/           ← 线性执行：文本 → 图片 → 视频 → 音频 → 合成
     │
     ▼
-output/             ← gen_YYYYMMDD_NNNN.mp4 (auto-numbered, no collisions)
+output/             ← gen_YYYYMMDD_NNNN.mp4（自动编号，无冲突）
 ```
 
-## Quick Start
+## 快速开始
 
-### 1. Install dependencies
+### 1. 安装依赖
 
 ```bash
 pip install -r requirements.txt
-pip install python-dotenv  # for .env file support
+pip install python-dotenv  # 支持.env文件
 ```
 
-### 2. Configure API Key
+### 2. 配置API Key
 
 ```bash
-# Copy the example and add your key
+# 复制示例文件并填入你的key
 cp .env.example .env
 
-# Edit .env with your AGNES_API_KEY
+# 编辑 .env 文件，填入 AGNES_API_KEY
 ```
 
-Or set as environment variable:
+或者设置环境变量：
 ```bash
-export AGNES_API_KEY="your-key-here"
+set AGNES_API_KEY=你的key
 ```
 
-### 3. Run
+### 3. 运行
 
 ```bash
-# Preview mode (no API calls)
+# 预览模式（不调用API）
 python main.py episode 2 --dry-run
 
-# Full pipeline execution
+# 完整流水线执行
 python main.py episode 2
 
-# Skip specific steps
+# 跳过某些步骤
 python main.py episode 2 --skip-image --skip-video
 ```
 
-### 4. Custom episode data
+### 4. 自定义剧集数据
 
-Replace the sample `get_sample_episode_info()` in `main.py` with your own episode JSON, or load from a file:
+把 `main.py` 里的 `get_sample_episode_info()` 替换为你的剧集JSON，或从文件加载：
 
 ```python
-# Load from JSON file
+# 从JSON文件加载
 from pipeline.step_text import load_episode_from_file
 parser = load_episode_from_file("episode_2.json")
 episode_info = parser.info
 ```
 
-## Project Structure
+## 项目结构
 
 ```
 DramaFlow/
-├── main.py                  # CLI entry point
-├── config.example.yaml      # Configuration template
-├── manifests/               # AI model registry
-│   ├── image_models.json    # Image generation models
-│   ├── video_models.json    # Video generation models
-│   └── audio_models.json    # Audio/TTS models
+├── main.py                  # CLI入口
+├── config.example.yaml      # 配置模板
+├── manifests/               # AI模型注册表
+│   ├── image_models.json    # 图片生成模型
+│   ├── video_models.json    # 视频生成模型
+│   └── audio_models.json    # 音频/TTS模型
 ├── adapters/
-│   ├── base.py              # Abstract adapter interface
-│   └── agnes_ai.py          # Agnes AI provider adapter
+│   ├── base.py              # 适配器抽象接口
+│   └── agnes_ai.py          # Agnes AI适配器
 ├── pipeline/
-│   ├── step_text.py         # Episode data parsing
-│   ├── step_image.py        # Character & scene image generation
-│   ├── step_video.py        # Image-to-video generation
-│   ├── step_audio.py        # TTS audio generation
-│   └── step_synthesize.py   # FFmpeg video synthesis
+│   ├── step_text.py         # 剧集数据解析
+│   ├── step_image.py        # 角色&场景图片生成
+│   ├── step_video.py        # 图生视频
+│   ├── step_audio.py        # TTS音频生成
+│   └── step_synthesize.py   # FFmpeg视频合成
 ├── media/
-│   ├── processor.py         # FFmpeg/Pillow wrappers
-│   └── utils.py             # Virtual paths, file naming, dedup
+│   ├── processor.py         # FFmpeg/Pillow封装
+│   └── utils.py             # 虚拟路径、文件命名、去重
 └── tests/
 ```
 
-## Supported AI Providers
+## 支持的AI服务商
 
-| Category | Current | Planned |
-|----------|---------|---------|
-| Image | Agnes AI (agnes-image-2.1-flash) | Free alternatives |
-| Video | Agnes AI (agnes-video-v2.0) | Free alternatives |
-| Audio | Microsoft Edge TTS (free) | - |
-| Synthesis | FFmpeg 8.x | - |
+| 类别 | 当前 | 计划 |
+|------|------|------|
+| 图片 | Agnes AI (agnes-image-2.1-flash) | 免费替代方案 |
+| 视频 | Agnes AI (agnes-video-v2.0) | 免费替代方案 |
+| 音频 | Microsoft Edge TTS（免费） | - |
+| 合成 | FFmpeg 8.x | - |
 
-## Technical Debt / TODO
+## 待办事项
 
-- [ ] FFmpeg subtitle addition (path resolution fix needed)
-- [ ] Vertical video blur-expand (currently black-bar fill)
-- [ ] Scene transition effects (fade in/out)
-- [ ] Parallel execution (currently serial)
-- [ ] Retry mechanism for API failures
-- [ ] Load episode data from external JSON/YAML file
+- [ ] FFmpeg字幕添加（路径解析修复）
+- [ ] 竖屏模糊扩展（目前是黑边填充）
+- [ ] 场景过渡效果（淡入淡出）
+- [ ] 并行执行（目前是串行）
+- [ ] API失败重试机制
+- [ ] 从外部JSON/YAML文件加载剧集数据
 
-## Inspired By
+## 灵感来源
 
-- [AI-CanvasPro](https://github.com/ashuoAI/AI-CanvasPro) — Node-based AI canvas editor (1078 stars)
-  - Learned: Manifest registration system, adapter pattern, virtual path abstraction, atomic writes
+- [AI-CanvasPro](https://github.com/ashuoAI/AI-CanvasPro) — 基于节点的AI画布编辑器（1078星）
+  - 学到了：Manifest注册系统、适配器模式、虚拟路径抽象、原子写入
 
-## License
+## 协议
 
-MIT License — for personal use and learning. Not for commercial purposes.
+MIT License — 个人学习和自用，非商业用途。
 
-## Stack
+## 技术栈
 
 - Python 3.10+
 - httpx / aiohttp
