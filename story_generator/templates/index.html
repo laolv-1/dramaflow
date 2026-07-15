@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DramaFlow - 策划案生成器</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            background: #0f0f1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        header h1 {
+            font-size: 28px;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+
+        header p {
+            color: #888;
+            font-size: 14px;
+        }
+
+        /* 设置区域 */
+        .card {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            border: 1px solid #2a2a4a;
+        }
+
+        .card h2 {
+            font-size: 16px;
+            color: #aaa;
+            margin-bottom: 16px;
+            font-weight: 500;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            color: #999;
+            margin-bottom: 6px;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 10px 14px;
+            background: #0f0f1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            border-color: #6c63ff;
+        }
+
+        .form-group textarea {
+            min-height: 120px;
+            resize: vertical;
+            font-family: inherit;
+            line-height: 1.6;
+        }
+
+        .btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .btn-primary {
+            background: #6c63ff;
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: #5a52e0;
+        }
+
+        .btn-primary:disabled {
+            background: #444;
+            cursor: not-allowed;
+        }
+
+        .btn-small {
+            padding: 6px 14px;
+            font-size: 12px;
+        }
+
+        .btn-success {
+            background: #2ecc71;
+            color: #fff;
+        }
+
+        /* 模式切换 */
+        .mode-switch {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 10px;
+            background: #0f0f1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            color: #888;
+            cursor: pointer;
+            text-align: center;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .mode-btn.active {
+            border-color: #6c63ff;
+            color: #6c63ff;
+            background: rgba(108, 99, 255, 0.1);
+        }
+
+        /* 进度条 */
+        .progress-bar {
+            height: 6px;
+            background: #0f0f1a;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 16px;
+            display: none;
+        }
+
+        .progress-bar.active {
+            display: block;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #6c63ff, #48c6ef);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .progress-text {
+            font-size: 13px;
+            color: #888;
+            margin-top: 8px;
+            display: none;
+        }
+
+        .progress-text.active {
+            display: block;
+        }
+
+        /* 状态消息 */
+        .status-msg {
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            margin-top: 12px;
+            display: none;
+        }
+
+        .status-msg.success {
+            background: rgba(46, 204, 113, 0.15);
+            color: #2ecc71;
+            display: block;
+        }
+
+        .status-msg.error {
+            background: rgba(231, 76, 60, 0.15);
+            color: #e74c3c;
+            display: block;
+        }
+
+        /* 策划案列表 */
+        .plan-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: #0f0f1a;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            border: 1px solid #2a2a4a;
+        }
+
+        .plan-info h3 {
+            font-size: 14px;
+            color: #ddd;
+            font-weight: 500;
+        }
+
+        .plan-info p {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .plan-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #555;
+            font-size: 14px;
+        }
+
+        /* 设置区域 */
+        .key-input-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .key-input-row input {
+            flex: 1;
+        }
+
+        .key-status {
+            font-size: 12px;
+            margin-top: 8px;
+        }
+
+        .key-status.ok { color: #2ecc71; }
+        .key-status.no { color: #e74c3c; }
+
+        /* 调研区域 */
+        .research-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .research-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            background: rgba(108, 99, 255, 0.15);
+            border: 1px solid #6c63ff;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #6c63ff;
+        }
+
+        .research-result {
+            margin-top: 16px;
+            padding: 16px;
+            background: #0f0f1a;
+            border-radius: 8px;
+            border: 1px solid #2a2a4a;
+            max-height: 400px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .research-result.active {
+            display: block;
+        }
+
+        .research-result h3 {
+            font-size: 14px;
+            color: #6c63ff;
+            margin-bottom: 12px;
+        }
+
+        .research-result .section {
+            margin-bottom: 12px;
+        }
+
+        .research-result .section h4 {
+            font-size: 13px;
+            color: #aaa;
+            margin-bottom: 6px;
+        }
+
+        .research-result .section ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .research-result .section li {
+            font-size: 12px;
+            color: #888;
+            padding: 2px 0;
+        }
+
+        .research-result .section li strong {
+            color: #ddd;
+        }
+
+        .research-result .insight {
+            font-size: 13px;
+            color: #ccc;
+            line-height: 1.8;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>DramaFlow 策划案生成器</h1>
+            <p>输入故事主题，AI自动生成完整短剧策划案</p>
+        </header>
+
+        <!-- API Key 设置 -->
+        <div class="card">
+            <h2>API Key 设置</h2>
+            <div class="key-input-row">
+                <input type="password" id="apiKeyInput" placeholder="输入 DeepSeek API Key">
+                <button class="btn btn-success btn-small" onclick="saveApiKey()">保存</button>
+            </div>
+            <div class="key-status" id="keyStatus"></div>
+        </div>
+
+        <!-- 热门榜调研 -->
+        <div class="card">
+            <h2>热门榜调研</h2>
+            <p style="font-size:12px;color:#666;margin-bottom:12px;">
+                调研抖音/TikTok/快手等平台的热门短剧题材，为策划案提供市场数据支撑
+            </p>
+            <div class="research-section">
+                <button class="btn btn-primary" id="researchBtn" onclick="startResearch()">
+                    🔍 调研热门榜
+                </button>
+                <span id="researchProgress" style="font-size:13px;color:#888;"></span>
+            </div>
+            <div class="progress-bar" id="researchProgressBar">
+                <div class="progress-fill" id="researchProgressFill"></div>
+            </div>
+            <div class="research-result" id="researchResult">
+                <h3>调研结果</h3>
+                <div id="researchContent"></div>
+                <button class="btn btn-small btn-primary" onclick="useResearchForGeneration()" style="margin-top:12px;">
+                    基于此调研生成策划案
+                </button>
+            </div>
+        </div>
+
+        <!-- 生成表单 -->
+        <div class="card">
+            <h2>生成策划案</h2>
+
+            <div class="mode-switch">
+                <div class="mode-btn active" onclick="switchMode('theme')" id="themeBtn">
+                    从主题生成
+                </div>
+                <div class="mode-btn" onclick="switchMode('story')" id="storyBtn">
+                    从故事文本生成
+                </div>
+            </div>
+
+            <div class="form-group" id="promptGroup">
+                <label id="promptLabel">故事主题（如：重生复仇、穿越修仙）</label>
+                <textarea id="promptText" placeholder="请输入故事主题或内容..."></textarea>
+            </div>
+
+            <button class="btn btn-primary" id="generateBtn" onclick="generate()">
+                开始生成
+            </button>
+
+            <div style="margin-top:12px;">
+                <label style="font-size:13px;color:#888;cursor:pointer;display:flex;align-items:center;gap:8px;">
+                    <input type="checkbox" id="useResearchCheckbox" style="width:auto;">
+                    使用上次调研结果生成（需要先完成热门榜调研）
+                </label>
+            </div>
+
+            <div class="progress-bar" id="progressBar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-text" id="progressText"></div>
+            <div class="status-msg" id="statusMsg"></div>
+        </div>
+
+        <!-- 已生成策划案 -->
+        <div class="card">
+            <h2>已生成的策划案</h2>
+            <div id="planList">
+                <div class="empty-state">暂无已生成的策划案</div>
+            </div>
+            <button class="btn btn-small" onclick="refreshPlans()" style="margin-top: 12px;">
+                刷新列表
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let currentMode = 'theme';
+        let statusCheckInterval = null;
+        let researchCheckInterval = null;
+        let lastResearchResult = null;
+
+        // 页面加载时检查API Key状态
+        window.onload = function() {
+            checkApiKeyStatus();
+            refreshPlans();
+        };
+
+        // 切换生成模式
+        function switchMode(mode) {
+            currentMode = mode;
+            document.getElementById('themeBtn').classList.toggle('active', mode === 'theme');
+            document.getElementById('storyBtn').classList.toggle('active', mode === 'story');
+
+            if (mode === 'theme') {
+                document.getElementById('promptLabel').textContent = '故事主题（如：重生复仇、穿越修仙）';
+                document.getElementById('promptText').placeholder = '请输入故事主题...\n例如：重生复仇、都市逆袭、穿越修仙';
+            } else {
+                document.getElementById('promptLabel').textContent = '故事内容';
+                document.getElementById('promptText').placeholder = '请输入故事文本...\n可以是小说章节、故事大纲或详细的情节描述';
+            }
+        }
+
+        // 检查API Key状态
+        async function checkApiKeyStatus() {
+            const statusEl = document.getElementById('keyStatus');
+            try {
+                const resp = await fetch('/api/plan_list');
+                if (resp.ok) {
+                    statusEl.textContent = '系统正常';
+                    statusEl.className = 'key-status ok';
+                }
+            } catch (e) {
+                statusEl.textContent = '服务未连接';
+                statusEl.className = 'key-status no';
+            }
+        }
+
+        // 保存API Key
+        async function saveApiKey() {
+            const input = document.getElementById('apiKeyInput');
+            const key = input.value.trim();
+            if (!key) {
+                alert('请输入API Key');
+                return;
+            }
+
+            try {
+                const resp = await fetch('/api/save_key', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: key })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    alert('API Key 已保存');
+                    input.value = '';
+                } else {
+                    alert('保存失败: ' + data.error);
+                }
+            } catch (e) {
+                alert('保存失败: ' + e.message);
+            }
+        }
+
+        // 生成策划案
+        async function generate() {
+            const prompt = document.getElementById('promptText').value.trim();
+            if (!prompt) {
+                alert('请输入故事主题或内容');
+                return;
+            }
+
+            const btn = document.getElementById('generateBtn');
+            btn.disabled = true;
+            btn.textContent = '生成中...';
+
+            // 显示进度条
+            document.getElementById('progressBar').classList.add('active');
+            document.getElementById('progressText').classList.add('active');
+            hideStatus();
+
+            try {
+                const resp = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: currentMode,
+                        prompt: prompt,
+                        use_research: document.getElementById('useResearchCheckbox').checked
+                    })
+                });
+
+                const data = await resp.json();
+                if (data.error) {
+                    showStatus('error', '生成失败: ' + data.error);
+                    btn.disabled = false;
+                    btn.textContent = '开始生成';
+                    return;
+                }
+
+                // 开始轮询状态
+                startStatusPolling();
+
+            } catch (e) {
+                showStatus('error', '请求失败: ' + e.message);
+                btn.disabled = false;
+                btn.textContent = '开始生成';
+            }
+        }
+
+        // 轮询生成状态
+        function startStatusPolling() {
+            const btn = document.getElementById('generateBtn');
+
+            statusCheckInterval = setInterval(async () => {
+                try {
+                    const resp = await fetch('/api/status');
+                    const data = await resp.json();
+
+                    document.getElementById('progressFill').style.width = data.percentage + '%';
+                    document.getElementById('progressText').textContent = data.progress || '处理中...';
+
+                    if (data.running) {
+                        btn.disabled = true;
+                        btn.textContent = '生成中...';
+                    } else if (data.result) {
+                        // 生成成功
+                        clearInterval(statusCheckInterval);
+                        showStatus('success',
+                            `生成成功！《${data.result.title}》- ${data.characters}个角色, ${data.scenes}个场景` +
+                            `<br>策划案已保存到: ${data.filename}`);
+
+                        btn.disabled = false;
+                        btn.textContent = '开始生成';
+
+                        // 清空输入
+                        document.getElementById('promptText').value = '';
+                        document.getElementById('progressBar').classList.remove('active');
+                        document.getElementById('progressText').classList.remove('active');
+
+                        // 刷新列表
+                        refreshPlans();
+                    } else if (data.error) {
+                        clearInterval(statusCheckInterval);
+                        showStatus('error', '生成失败: ' + data.error);
+                        btn.disabled = false;
+                        btn.textContent = '开始生成';
+                        document.getElementById('progressBar').classList.remove('active');
+                        document.getElementById('progressText').classList.remove('active');
+                    }
+                } catch (e) {
+                    console.error('状态轮询失败:', e);
+                }
+            }, 2000);
+        }
+
+        // 刷新策划案列表
+        async function refreshPlans() {
+            try {
+                const resp = await fetch('/api/plan_list');
+                const data = await resp.json();
+                renderPlanList(data.plans || []);
+            } catch (e) {
+                console.error('刷新列表失败:', e);
+            }
+        }
+
+        function renderPlanList(plans) {
+            const container = document.getElementById('planList');
+            if (!plans || plans.length === 0) {
+                container.innerHTML = '<div class="empty-state">暂无已生成的策划案</div>';
+                return;
+            }
+
+            let html = '';
+            plans.forEach(plan => {
+                const sizeKB = Math.round(plan.size / 1024);
+                html += `
+                    <div class="plan-item">
+                        <div class="plan-info">
+                            <h3>${plan.name.replace('_策划案.md', '')}</h3>
+                            <p>${plan.filename} · ${sizeKB}KB</p>
+                        </div>
+                        <div class="plan-actions">
+                            <button class="btn btn-small" onclick="downloadFile('${plan.filename}')">下载</button>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function downloadFile(filename) {
+            window.open('/api/download/' + filename, '_blank');
+        }
+
+        function showStatus(type, message) {
+            const el = document.getElementById('statusMsg');
+            el.className = 'status-msg ' + type;
+            el.innerHTML = message;
+            el.style.display = 'block';
+        }
+
+        function hideStatus() {
+            document.getElementById('statusMsg').style.display = 'none';
+        }
+
+        // ========== 调研功能 ==========
+
+        // 启动调研
+        async function startResearch() {
+            const btn = document.getElementById('researchBtn');
+            const progress = document.getElementById('researchProgress');
+            btn.disabled = true;
+            btn.textContent = '调研中...';
+            progress.textContent = '正在启动调研任务';
+
+            try {
+                const resp = await fetch('/api/research', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ idea: document.getElementById('promptText').value.trim() })
+                });
+                const data = await resp.json();
+                if (data.error) {
+                    progress.textContent = '调研失败: ' + data.error;
+                    btn.disabled = false;
+                    btn.textContent = '🔍 调研热门榜';
+                    return;
+                }
+
+                // 开始轮询调研进度
+                startResearchPolling();
+
+            } catch (e) {
+                progress.textContent = '请求失败: ' + e.message;
+                btn.disabled = false;
+                btn.textContent = '🔍 调研热门榜';
+            }
+        }
+
+        // 轮询调研状态
+        function startResearchPolling() {
+            const btn = document.getElementById('researchBtn');
+            const progress = document.getElementById('researchProgress');
+            const progressBar = document.getElementById('researchProgressBar');
+            const progressFill = document.getElementById('researchProgressFill');
+
+            progressBar.classList.add('active');
+
+            researchCheckInterval = setInterval(async () => {
+                try {
+                    const resp = await fetch('/api/research_status');
+                    const data = await resp.json();
+
+                    progress.textContent = data.progress || '调研中...';
+                    progressFill.style.width = data.percentage + '%';
+
+                    if (data.running) {
+                        btn.disabled = true;
+                    } else if (data.result) {
+                        // 调研成功
+                        clearInterval(researchCheckInterval);
+                        progressBar.classList.remove('active');
+                        btn.disabled = false;
+                        btn.textContent = '🔍 调研热门榜';
+                        progress.textContent = '调研完成！';
+
+                        lastResearchResult = data.result;
+                        renderResearchResult(data.result);
+                    } else if (data.error) {
+                        clearInterval(researchCheckInterval);
+                        progressBar.classList.remove('active');
+                        progress.textContent = '调研失败: ' + data.error;
+                        btn.disabled = false;
+                        btn.textContent = '🔍 调研热门榜';
+                    }
+                } catch (e) {
+                    console.error('调研状态轮询失败:', e);
+                }
+            }, 2000);
+        }
+
+        // 渲染调研结果
+        function renderResearchResult(result) {
+            const container = document.getElementById('researchContent');
+            const panel = document.getElementById('researchResult');
+            panel.classList.add('active');
+
+            let html = '';
+
+            // 热门关键词
+            const keywords = result.hot_keywords || [];
+            if (keywords.length > 0) {
+                html += '<div class="section"><h4>🔥 热门关键词 TOP10</h4><ul>';
+                for (const kw of keywords) {
+                    html += `<li><strong>${kw.keyword}</strong>: 出现 ${kw.frequency} 次</li>`;
+                }
+                html += '</ul></div>';
+            }
+
+            // DeepSeek洞察
+            const insight = result.deepseek_insight || '';
+            if (insight) {
+                html += '<div class="section"><h4>💡 趋势分析</h4><div class="insight">' + escapeHtml(insight) + '</div></div>';
+            }
+
+            container.innerHTML = html;
+        }
+
+        // 使用调研结果生成策划案
+        function useResearchForGeneration() {
+            document.getElementById('useResearchCheckbox').checked = true;
+            document.getElementById('promptText').focus();
+            alert('已勾选"使用调研结果"，点击"开始生成"即可基于调研结果生成策划案');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
