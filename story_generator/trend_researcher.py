@@ -275,39 +275,45 @@ class TrendResearcher:
                     total_items += 1
 
         # 使用预定义的短剧题材关键词集合进行统计
+        # 格式: (原始词, 统一显示词) — 解决大小写重复问题
         genre_keywords = [
             # 中文题材词
-            "重生", "复仇", "逆袭", "闪婚", "马甲", "大女主", "修仙", "玄幻",
-            "甜宠", "虐恋", "霸总", "CEO", "离婚", "带球跑", "换亲", "年代",
-            "末世", "丧尸", "系统", "空间", "团宠", "炮灰", "攻略", "修罗场",
-            "狼人", "Alpha", "Omega", "兽世", "星际", "末世", "无限流",
-            # 英文题材词
-            "rebirth", "revenge", "contract", "secret identity", "hidden power",
-            "amnesia", "twin", "surrogate", "boss", "ceo", "marriage",
+            ("重生", "重生"), ("复仇", "复仇"), ("逆袭", "逆袭"), ("闪婚", "闪婚"),
+            ("马甲", "马甲"), ("大女主", "大女主"), ("修仙", "修仙"), ("玄幻", "玄幻"),
+            ("甜宠", "甜宠"), ("虐恋", "虐恋"), ("霸总", "霸总"), ("CEO", "霸总"),
+            ("离婚", "离婚"), ("带球跑", "带球跑"), ("换亲", "换亲"), ("年代", "年代"),
+            ("末世", "末世"), ("丧尸", "丧尸"), ("系统", "系统"), ("空间", "空间"),
+            ("团宠", "团宠"), ("炮灰", "炮灰"), ("攻略", "攻略"), ("修罗场", "修罗场"),
+            ("狼人", "狼人"), ("Alpha", "Alpha"), ("Omega", "Omega"), ("兽世", "兽世"),
+            ("星际", "星际"), ("无限流", "无限流"), ("重生归来", "重生"),
+            ("真千金", "大女主"), ("假千金", "大女主"), ("闪婚后", "闪婚"),
+            # 英文题材词（映射到中文）
+            ("rebirth", "重生"), ("revenge", "复仇"), ("contract marriage", "闪婚"),
+            ("secret identity", "马甲"), ("hidden power", "逆袭"),
+            ("amnesia", "失忆"), ("twin", "双胞胎"), ("surrogate", "替身"),
+            ("boss", "霸总"), ("ceo", "霸总"), ("marriage", "闪婚"),
+            ("alpha", "Alpha"), ("omega", "Omega"), ("wolf", "狼人"),
         ]
 
-        # 统计题材关键词频次
+        # 统计题材关键词频次（统一映射到中文显示词）
         kw_freq = {}
         for source_key, text in all_texts:
             text_lower = text.lower()
-            for kw in genre_keywords:
-                kw_lower = kw.lower()
+            for raw_kw, display_kw in genre_keywords:
+                raw_lower = raw_kw.lower()
                 # 中文词：精确匹配
-                if any('\u4e00' <= c <= '\u9fff' for c in kw):
-                    count = text.count(kw)
+                if any('\u4e00' <= c <= '\u9fff' for c in raw_kw):
+                    count = text.count(raw_kw)
                 else:
                     # 英文词：用正则匹配单词边界
-                    count = len(re.findall(rf'\b{re.escape(kw_lower)}\b', text_lower))
+                    count = len(re.findall(rf'\b{re.escape(raw_lower)}\b', text_lower))
                 if count > 0:
-                    kw_freq[kw] = kw_freq.get(kw, 0) + count
+                    kw_freq[display_kw] = kw_freq.get(display_kw, 0) + count
 
-        # 热门题材TOP（排除通用噪音词）
-        noise_words = {"drama", "short", "video", "watch", "follow", "share", "like",
-                       "the", "and", "or", "new", "popular", "trending", "series",
-                       "episode", "season", "story", "love", "life", "family"}
+        # 热门题材TOP（排除英文词，优先显示中文题材词）
         hot_keywords = sorted(
             [(k, v) for k, v in kw_freq.items()
-             if k.lower() not in noise_words and len(k) >= 2 and v >= 1],
+             if len(k) >= 2 and v >= 1 and any('\u4e00' <= c <= '\u9fff' for c in k)],
             key=lambda x: x[1], reverse=True
         )[:20]
 
