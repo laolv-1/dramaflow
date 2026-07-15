@@ -191,6 +191,26 @@ class TrendResearcher:
 
         return results
 
+    def _clean_content(self, content: str) -> str:
+        """清洗网页内容，移除噪音"""
+        import re
+        # 移除URL
+        content = re.sub(r'https?://\S+', '', content)
+        # 移除HTML标签
+        content = re.sub(r'<[^>]+>', '', content)
+        # 移除导航/菜单类文本（中英文）
+        noise_patterns = [
+            r'(?i)(?:follow|followers|sign\s*in|sign\s*out|login)',
+            r'(?i)(?:settings|preferences|help|about)',
+            r'(?i)(?:cookie|privacy|terms)',
+            r'(?i)(?:广告|推广|推荐|热门|最新|标签|话题|Copyright)',
+        ]
+        for pat in noise_patterns:
+            content = re.sub(pat, '', content)
+        # 清理空白行
+        lines = [l.strip() for l in content.split('\n') if l.strip()]
+        return '\n'.join(lines)
+
     def _fetch_via_jina(self, url: str, user_idea: str) -> Optional[Dict]:
         """通过Jina Reader抓取网页内容 — 返回干净原始文本"""
         if not self.jina_token:
