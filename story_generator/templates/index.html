@@ -375,18 +375,63 @@
         <div class="card">
             <h2>生成策划案</h2>
 
+            <!-- 输入类型切换 -->
             <div class="mode-switch">
-                <div class="mode-btn active" onclick="switchMode('theme')" id="themeBtn">
+                <div class="mode-btn active" onclick="switchInputType('theme')" id="themeBtn">
+                    原创方向
+                </div>
+                <div class="mode-btn" onclick="switchInputType('novel')" id="novelBtn">
+                    小说改编
+                </div>
+            </div>
+
+            <!-- 调研开关（仅原创方向显示） -->
+            <div id="researchToggle" style="margin-bottom:12px;">
+                <label style="font-size:13px;color:#888;cursor:pointer;display:flex;align-items:center;gap:6px;">
+                    <input type="checkbox" id="useResearchCheckbox">
+                    先调研热门榜（需要约30秒）
+                </label>
+            </div>
+
+            <div class="mode-switch">
+                <div class="mode-btn active" onclick="switchMode('theme')" id="themeModeBtn">
                     从主题生成
                 </div>
-                <div class="mode-btn" onclick="switchMode('story')" id="storyBtn">
+                <div class="mode-btn" onclick="switchMode('story')" id="storyModeBtn">
                     从故事文本生成
                 </div>
             </div>
 
+            <!-- 题材选择 -->
+            <div class="form-group" style="margin-top:12px;">
+                <label>题材类型</label>
+                <select id="genreSelect">
+                    <option value="其他">其他（通用）</option>
+                    <option value="玄幻修仙" selected>玄幻修仙</option>
+                    <option value="都市">都市</option>
+                    <option value="言情">言情</option>
+                    <option value="悬疑">悬疑</option>
+                    <option value="科幻">科幻</option>
+                    <option value="动漫">动漫</option>
+                    <option value="历史">历史</option>
+                    <option value="恐怖">恐怖</option>
+                </select>
+            </div>
+
+            <!-- 目标受众（可选） -->
+            <div class="form-group">
+                <label>目标受众（可选，留空则由AI根据题材动态推断）</label>
+                <input type="text" id="audienceInput" placeholder="例如：18-24岁女性、全年龄段等">
+            </div>
+
             <div class="form-group" id="promptGroup">
                 <label id="promptLabel">故事主题（如：重生复仇、穿越修仙）</label>
-                <textarea id="promptText" placeholder="请输入故事主题或内容..."></textarea>
+                <textarea id="promptText" placeholder="请输入故事主题或内容...\n例如：重生复仇、都市逆袭、穿越修仙"></textarea>
+            </div>
+
+            <!-- 小说改编模式下的特殊提示 -->
+            <div id="novelHint" style="display:none;font-size:12px;color:#666;margin-bottom:12px;padding:10px;background:rgba(108,99,255,0.1);border-radius:6px;">
+                粘贴小说章节内容即可，AI会自动将其改编为短剧格式。保留核心冲突和精彩台词，去掉不必要的叙述。
             </div>
 
             <button class="btn btn-primary" id="generateBtn" onclick="generate()">
@@ -421,6 +466,7 @@
 
     <script>
         let currentMode = 'theme';
+        let currentInputType = 'theme';  // theme / novel
         let statusCheckInterval = null;
         let researchCheckInterval = null;
         let lastResearchResult = null;
@@ -430,6 +476,28 @@
             checkApiKeyStatus();
             refreshPlans();
         };
+
+        // 切换输入类型（原创方向 vs 小说改编）
+        function switchInputType(type) {
+            currentInputType = type;
+            document.getElementById('themeBtn').classList.toggle('active', type === 'theme');
+            document.getElementById('novelBtn').classList.toggle('active', type === 'novel');
+
+            const researchToggle = document.getElementById('researchToggle');
+            const novelHint = document.getElementById('novelHint');
+
+            if (type === 'theme') {
+                document.getElementById('promptLabel').textContent = '故事主题（如：重生复仇、穿越修仙）';
+                document.getElementById('promptText').placeholder = '请输入故事主题或内容...\n例如：重生复仇、都市逆袭、穿越修仙';
+                researchToggle.style.display = 'block';
+                novelHint.style.display = 'none';
+            } else {
+                document.getElementById('promptLabel').textContent = '小说章节内容';
+                document.getElementById('promptText').placeholder = '请粘贴小说章节内容...\nAI会自动将其改编为短剧格式';
+                researchToggle.style.display = 'none';
+                novelHint.style.display = 'block';
+            }
+        }
 
         // 切换生成模式
         function switchMode(mode) {
@@ -510,9 +578,11 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        type: currentMode,
+                        inputType: currentInputType,
                         prompt: prompt,
-                        use_research: document.getElementById('useResearchCheckbox').checked
+                        useResearch: document.getElementById('useResearchCheckbox').checked,
+                        genre: document.getElementById('genreSelect').value,
+                        targetAudience: document.getElementById('audienceInput').value.trim() || null
                     })
                 });
 

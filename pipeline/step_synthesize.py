@@ -1,5 +1,6 @@
 """Pipeline步骤5: 视频合成（FFmpeg封装）"""
 
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -19,10 +20,10 @@ class VideoSynthesizer:
 
     def _find_ffmpeg(self) -> str:
         """查找FFmpeg可执行文件"""
-        # 优先找常见路径
         candidates = [
             "ffmpeg",  # 系统PATH
-            r"D:\Account_Forge\市场调研\工具\ffmpeg_temp\ffmpeg-8.1.2-essentials_build\bin\ffmpeg.exe",
+            r"D:/Account_Forge/市场调研/工具/ffmpeg_temp/ffmpeg-8.1.2-essentials_build/bin/ffmpeg.exe",
+            r"D:\Account_Forge\AI-CanvasPro\AI-CanvasPro-windows\AI CanvasPro\resources\runtime\ffmpeg\bin\ffmpeg.exe",
         ]
         for candidate in candidates:
             if os.path.exists(candidate):
@@ -33,7 +34,8 @@ class VideoSynthesizer:
         """查找ffprobe"""
         candidates = [
             "ffprobe",
-            r"D:\Account_Forge\市场调研\工具\ffmpeg_temp\ffmpeg-8.1.2-essentials_build\bin\ffprobe.exe",
+            r"D:/Account_Forge/市场调研/工具/ffmpeg_temp/ffmpeg-8.1.2-essentials_build/bin/ffprobe.exe",
+            r"D:\Account_Forge\AI-CanvasPro\AI-CanvasPro-windows\AI CanvasPro\resources\runtime\ffmpeg\bin\ffprobe.exe",
         ]
         for candidate in candidates:
             if os.path.exists(candidate):
@@ -161,10 +163,12 @@ class VideoSynthesizer:
         # 读取序列号
         seq = 0
         if seq_file.exists():
-            import json
-            with open(seq_file, "r") as f:
-                data = json.load(f)
-                seq = data.get(today, 0)
+            try:
+                with open(seq_file, "r") as f:
+                    data = json.load(f)
+                    seq = data.get(today, 0)
+            except (json.JSONDecodeError, IOError):
+                seq = 0
         seq += 1
 
         # 保存序列号
@@ -176,12 +180,12 @@ class VideoSynthesizer:
             name += f"_{suffix}"
         return f"{name}.mp4"
 
-    async def synthesize_episode(self, video_paths: List[str],
-                                  audio_paths: List[str],
-                                  subtitles: Optional[List[Dict]],
-                                  episode_num: int) -> str:
+    def synthesize_episode_sync(self, video_paths: List[str],
+                                audio_paths: List[str],
+                                subtitles: Optional[List[Dict]],
+                                episode_num: int) -> str:
         """
-        完整合成流程
+        完整合成流程（同步版本）
         1. 音频替换到每个视频
         2. 拼接所有视频
         3. 添加字幕（可选）
@@ -193,7 +197,7 @@ class VideoSynthesizer:
         processed_videos = []
 
         # Step 1: 为每个场景视频替换音频并转竖屏
-        for idx, (video_path, audio_path) in enumerate(zip(video_paths, audio_paths)):
+        for idx, video_path in enumerate(video_paths):
             print(f"  处理场景 {idx + 1}/{len(video_paths)}...")
 
             basename = Path(video_path).stem
@@ -201,16 +205,43 @@ class VideoSynthesizer:
             audio_replaced = self.output_dir / f"{basename}_audio.mp4"
 
             # 转竖屏
-            if not self.convert_to_vertical(video_path, vertical_path):
+            if not self.convert_to_vertical(video_path, str(vertical_path)):
                 print(f"  [错误] 竖屏转换失败，跳过场景{idx + 1}")
                 continue
 
-            # 替换音频（用第一个音频替换所有，或按场景匹配）
-            if not self.replace_audio(vertical_path, audio_path, audio_replaced):
-                print(f"  [错误] 音频替换失败")
-                continue
+            # 替换音频（取对应音频片段）
+            if audio_paths:
+                # 简单处理：用第一个音频替换所有
+                audio_file = audio_paths[0]
+                if not self.replace_audio(str(vertical_path), audio_file, str(audio_replaced)):
+                    print(f"  [错误] 音频替换失败")
+                    continue
+            else:
+                # 无音频，直接复制竖屏版本
+                import shutil
+                shutil.copy2(str(vertical_path), str(audio_replaced))
+                audio_replaced = vertical_path
 
             processed_videos.append(str(audio_replaced))
+
+        # Step 2: 拼接所有场景
+        output_filename = self.gen_output_filename(episode_num, "final")
+        output_path = self.output_dir / output_filename
+
+        print(f"  [拼接] {len(processed_videos)}个场景 -> {output_filename}")
+        if not self.concatenate_videos(processed_videos, str(output_path)):
+            print("  [错误] 视频拼接失败")
+            return ""
+
+        print(f"\n  [完成] 成品: {output_path}")
+        return str(output_path)
+
+    async def synthesize_episode(self, video_paths: List[str],
+                                  audio_paths: List[str],
+                                  subtitles: Optional[List[Dict]],
+                                  episode_num: int) -> str:
+        """完整合成流程（异步包装）"""
+        return self.synthesize_episode_sync(video_paths, audio_paths, subtitles, episode_num)
 
         # Step 2: 拼接所有场景
         output_filename = self.gen_output_filename(episode_num, "final")

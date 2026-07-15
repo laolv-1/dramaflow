@@ -43,6 +43,7 @@ def parse_args():
     parser.add_argument("--skip-synthesize", action="store_true", help="跳过视频合成")
     parser.add_argument("--config", type=str, default=None, help="配置文件路径")
     parser.add_argument("--output-dir", type=str, default=None, help="输出目录")
+    parser.add_argument("--json", type=str, default=None, help="策划案JSON文件路径（覆盖 --episode）")
     return parser.parse_args()
 
 
@@ -154,6 +155,10 @@ async def run_pipeline(adapter: AgnesAIAdapter, episode_info: dict,
     episode_num = episode_info["episode"]
     dry_run = args.dry_run
 
+    # 初始化变量
+    video_paths = []
+    all_audio = []
+
     print(f"\n{'='*60}")
     print(f"  Short Drama Tool - 第{episode_num}集")
     print(f"  {'[预览模式]' if dry_run else '[执行模式]'}")
@@ -173,6 +178,7 @@ async def run_pipeline(adapter: AgnesAIAdapter, episode_info: dict,
             else:
                 path = await image_gen.generate_character_image(char, episode_num)
                 character_paths.append(path)
+            await asyncio.sleep(2)  # 防限流
 
         print()
 
@@ -190,6 +196,7 @@ async def run_pipeline(adapter: AgnesAIAdapter, episode_info: dict,
             else:
                 path = await image_gen.generate_scene_image(scene, episode_num)
                 scene_paths[scene["name"]] = path
+            await asyncio.sleep(2)  # 防限流
 
         print()
 
@@ -225,8 +232,12 @@ async def run_pipeline(adapter: AgnesAIAdapter, episode_info: dict,
             episode_info.get("scenes", []), episode_num
         )
 
+        all_audio = audio_results["narration"] + audio_results["dialogue"]
         print(f"  旁白: {len(audio_results['narration'])}段")
         print(f"  台词: {len(audio_results['dialogue'])}段")
+        print()
+    else:
+        all_audio = []
         print()
 
     # Step 5: 视频合成
@@ -237,20 +248,20 @@ async def run_pipeline(adapter: AgnesAIAdapter, episode_info: dict,
             target_resolution="1080x1920",
         )
 
-        # 简化：用第一个音频文件合成所有视频
-        all_audio = audio_results["narration"] + audio_results["dialogue"] if not args.skip_audio else []
         if video_paths and all_audio:
-            final = await synthesizer.synthesize_episode(
+            final = synthesizer.synthesize_episode_sync(
                 video_paths, all_audio, None, episode_num
             )
             print(f"\n  成品视频: {final}")
         elif video_paths:
             print(f"\n  [提示] 无音频，仅拼接视频")
             print(f"  视频列表: {video_paths}")
+        else:
+            print(f"\n  [提示] 无视频或音频，跳过合成")
     elif dry_run:
         print("[DRY-RUN] 预览模式，跳过实际合成")
-        print(f"  预计视频数: {len(video_paths) if 'video_paths' in dir() else 0}")
-        print(f"  预计音频数: {len(all_audio) if 'all_audio' in dir() else 0}")
+        print(f"  预计视频数: {len(video_paths)}")
+        print(f"  预计音频数: {len(all_audio)}")
 
     print(f"\n{'='*60}")
     print(f"  第{episode_num}集 {'预览完成' if dry_run else '生成完成'}")
@@ -282,8 +293,14 @@ def main():
     base_dir = args.output_dir or config.get("output_dir", "./output")
     vpath = VirtualPathManager(base_dir)
 
-    # 获取剧集信息
-    episode_info = get_sample_episode_info(args.episode_num)
+    # 获取剧集信息（从JSON文件或默认示例）
+    if args.json:
+        from converter import convert_json_file
+        print(f"[加载] 从策划案JSON: {args.json}")
+        raw_data = convert_json_file(args.json)
+        episode_info = raw_data
+    else:
+        episode_info = get_sample_episode_info(args.episode_num)
 
     # 创建适配器
     adapter = AgnesAIAdapter(api_key or "dummy-key-for-dry-run")

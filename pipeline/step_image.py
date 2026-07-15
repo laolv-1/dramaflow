@@ -2,6 +2,7 @@
 
 import os
 import time
+import asyncio
 from pathlib import Path
 from typing import Dict, Any, List
 from adapters.base import BaseAdapter

@@ -1,6 +1,6 @@
 """Agnes AI 适配器 - 对接 agnes-ai.com API"""
 
-import os
+import asyncio
 import aiohttp
 from typing import Dict, Any, Optional
 from adapters.base import BaseAdapter
@@ -25,14 +25,7 @@ class AgnesAIAdapter(BaseAdapter):
 
     async def generate_image(self, prompt: str, **kwargs) -> Dict[str, Any]:
         """
-        调用文生图API
-        Args:
-            prompt: 英文提示词
-            negative_prompt: 负面提示词（可选）
-            size: 输出尺寸 (默认2K)
-            style: 风格预设（可选）
-        Returns:
-            {"url": "图片URL", "model": "模型名"}
+        调用文生图API（带重试机制）
         """
         size = kwargs.get("size", "2K")
         extra_body = {"response_format": "url"}
@@ -45,20 +38,30 @@ class AgnesAIAdapter(BaseAdapter):
         if kwargs.get("negative_prompt"):
             payload["negative_prompt"] = kwargs["negative_prompt"]
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{self.API_BASE}/images/generations",
-                headers=self._get_headers(),
-                json=payload,
-                timeout=aiohttp.ClientTimeout(total=120),
-            ) as resp:
-                result = await resp.json()
-                if "data" in result and len(result["data"]) > 0:
-                    return {"url": result["data"][0]["url"], "model": "agnes-image-2.1-flash"}
-                elif "error" in result:
-                    raise RuntimeError(f"图片生成失败: {result['error']}")
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                timeout = aiohttp.ClientTimeout(total=120)
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.post(
+                        f"{self.API_BASE}/images/generations",
+                        headers=self._get_headers(),
+                        json=payload,
+                    ) as resp:
+                        result = await resp.json()
+                        if "data" in result and len(result["data"]) > 0:
+                            return {"url": result["data"][0]["url"], "model": "agnes-image-2.1-flash"}
+                        elif "error" in result:
+                            raise RuntimeError(f"图片生成失败: {result['error']}")
+                        else:
+                            raise RuntimeError(f"图片生成返回异常: {result}")
+            except (aiohttp.ClientConnectionError, aiohttp.ServerDisconnectedError, asyncio.TimeoutError) as e:
+                if attempt < max_retries - 1:
+                    wait_time = 3 * (attempt + 1)
+                    print(f"  [重试] 连接失败: {e}, {wait_time}秒后重试...")
+                    await asyncio.sleep(wait_time)
                 else:
-                    raise RuntimeError(f"图片生成返回异常: {result}")
+                    raise RuntimeError(f"图片生成失败，已重试{max_retries}次: {e}")
 
     async def generate_video(self, image_url: str = "", image_path: str = "",
                               prompt: str = "", duration: int = 5) -> Dict[str, Any]:

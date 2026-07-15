@@ -13,6 +13,7 @@ import time
 import re
 import threading
 from pathlib import Path
+from flask import Flask, render_template, request, jsonify, send_from_directory
 from typing import Optional
 from generator import EpisodeGenerator
 from trend_researcher import TrendResearcher
@@ -45,6 +46,9 @@ _research_status = {
 
 # 缓存最后一次调研结果（供生成策划案时使用）
 _cached_research_result = None
+
+
+def _find(data, *keys, default=None):
     """递归查找任意键名的值，兼容各种字段名变体"""
     if not isinstance(data, dict):
         return default
@@ -441,26 +445,44 @@ def _generate_markdown(project_info, characters, episodes, production):
     return "\n".join(md)
 
 
-def _generate_worker(generator: EpisodeGenerator, user_prompt: str, prompt_type: str, research_result: Optional[dict] = None):
-    """后台线程执行生成任务"""
+def _generate_worker(generator: EpisodeGenerator, user_prompt: str, input_type: str, genre: str,
+                      target_audience: Optional[str], research_result: Optional[dict]):
+    """后台线程执行生成任务
+
+    Args:
+        generator: EpisodeGenerator实例
+        user_prompt: 用户输入（主题或小说内容）
+        input_type: "theme"=原创方向, "story"=故事文本, "novel"=小说改编
+        genre: 题材类型（动态传入）
+        target_audience: 目标受众（可选）
+        research_result: 调研结果（可选，仅对theme模式生效）
+    """
     _generation_status["running"] = True
     _generation_status["progress"] = "正在生成策划案..."
     _generation_status["percentage"] = 20
 
     try:
-        if research_result:
+        if input_type == "novel":
+            # 小说改编模式
+            result = generator.generate_from_novel(user_prompt, episode_count=12, total_episodes=80)
+        elif research_result:
             _generation_status["progress"] = "基于调研结果生成策划案..."
             result = generator.generate_with_research(
                 theme=user_prompt,
-                genre="玄幻修仙",
+                genre=genre,
                 episode_count=12,
                 total_episodes=80,
                 research_result=research_result,
+                target_audience=target_audience,
             )
-        elif prompt_type == "story":
-            result = generator.generate_from_story(user_prompt, episode_count=12, total_episodes=80)
+        elif input_type == "story":
+            result = generator.generate_from_story(
+                user_prompt, episode_count=12, total_episodes=80, genre=genre, target_audience=target_audience
+            )
         else:
-            result = generator.generate_from_theme(user_prompt, genre="玄幻修仙", episode_count=12, total_episodes=80)
+            result = generator.generate_from_theme(
+                user_prompt, genre=genre, episode_count=12, total_episodes=80, target_audience=target_audience
+            )
 
         _generation_status["progress"] = "正在保存策划案..."
         _generation_status["percentage"] = 80
@@ -627,12 +649,14 @@ def generate():
         return jsonify({"error": "已有生成任务正在进行中，请稍后再试"})
 
     data = request.json
-    prompt_type = data.get("type", "theme")
+    input_type = data.get("inputType", "theme")  # theme / novel
     prompt_text = data.get("prompt", "").strip()
-    use_research = data.get("use_research", False)
+    use_research = data.get("useResearch", False)
+    genre = data.get("genre", "其他")  # 题材类型
+    target_audience = data.get("targetAudience", None)  # 目标受众（可选）
 
     if not prompt_text:
-        return jsonify({"error": "请输入故事主题或内容"})
+        return jsonify({"error": "请输入故事主题或小说内容"})
 
     km = KeyManager(config_dir=str(BASE_DIR))
     api_key = km.get_key("deepseek")
@@ -640,24 +664,28 @@ def generate():
         return jsonify({"error": "未配置DeepSeek API Key，请先在设置页面配置"})
 
     try:
-        # 如果有调研结果，用pro做分析；否则用flash生成策划案
-        if use_research and _cached_research_result:
-            # 先用pro做分析（实际上调研时已经分析过了，这里直接生成）
-            gen = EpisodeGenerator(model="deepseek-v4-flash", thinking_enabled=False)
-            gen.client = type(gen.client)(api_key=api_key, base_url="https://api.deepseek.com")
+        gen = EpisodeGenerator(model="deepseek-v4-flash", thinking_enabled=False)
+        gen.client = type(gen.client)(api_key=api_key, base_url="https://api.deepseek.com")
 
+        if input_type == "novel":
+            # 小说改编模式：不需要调研
             thread = threading.Thread(
                 target=_generate_worker,
-                args=(gen, prompt_text, prompt_type, _cached_research_result),
+                args=(gen, prompt_text, "novel", genre, target_audience, None),
+                daemon=True,
+            )
+        elif input_type == "theme" and use_research and _cached_research_result:
+            # 原创方向 + 调研结果
+            thread = threading.Thread(
+                target=_generate_worker,
+                args=(gen, prompt_text, "theme", genre, target_audience, _cached_research_result),
                 daemon=True,
             )
         else:
-            gen = EpisodeGenerator(model="deepseek-v4-flash", thinking_enabled=False)
-            gen.client = type(gen.client)(api_key=api_key, base_url="https://api.deepseek.com")
-
+            # 原创方向，无调研
             thread = threading.Thread(
                 target=_generate_worker,
-                args=(gen, prompt_text, prompt_type, None),
+                args=(gen, prompt_text, "theme", genre, target_audience, None),
                 daemon=True,
             )
         thread.start()
