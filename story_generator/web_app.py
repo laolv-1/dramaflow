@@ -551,26 +551,33 @@ def _refresh_plan_list():
         })
 
 
-def _research_worker(user_idea: str):
-    """后台线程执行调研任务"""
+def _research_worker(user_topic: str, category: str = "all"):
+    """后台线程执行调研任务
+    Args:
+        user_topic: 调研主题/话题
+        category: 调研类别 "hotlist"/"trend"/"industry"/"community"/"youtube"/"all"
+    """
     global _research_status, _cached_research_result
     _research_status["running"] = True
-    _research_status["progress"] = "正在调研热门榜..."
+    _research_status["progress"] = "正在调研行业数据..."
     _research_status["percentage"] = 10
 
     try:
         researcher = TrendResearcher(config_dir=str(BASE_DIR))
 
-        _research_status["progress"] = "抓取抖音/快手热榜..."
+        category_name = {"hotlist": "热点排行榜", "trend": "搜索趋势", "industry": "行业数据",
+                         "community": "内容社区", "youtube": "YouTube", "all": "全量"}[category]
+        _research_status["progress"] = f"抓取{category_name}数据源..."
         _research_status["percentage"] = 20
 
-        _research_status["progress"] = "抓取TikTok/YouTube热门..."
-        _research_status["percentage"] = 40
-
         _research_status["progress"] = "本地数据整理..."
-        _research_status["percentage"] = 60
+        _research_status["percentage"] = 50
 
-        result = researcher.research(user_idea=user_idea, use_deepseek=True)
+        result = researcher.research(
+            user_topic=user_topic,
+            category=category,
+            use_deepseek=True,
+        )
 
         _research_status["progress"] = "正在生成调研摘要..."
         _research_status["percentage"] = 80
@@ -580,9 +587,9 @@ def _research_worker(user_idea: str):
             "id": result.get("id", ""),
             "timestamp": result.get("timestamp", ""),
             "sources_covered": result.get("local_analysis", {}).get("sources_covered", 0),
-            "hot_keywords": result.get("local_analysis", {}).get("hot_keywords", [])[:10],
+            "hot_words": result.get("local_analysis", {}).get("hot_words", [])[:10],
             "deepseek_insight": result.get("deepseek_insight", {}).get("raw_insight", ""),
-            "user_idea": user_idea,
+            "user_topic": user_topic,
         }
         _research_status["percentage"] = 100
         _research_status["progress"] = "调研完成"
@@ -610,16 +617,17 @@ def get_status():
 
 @app.route("/api/research", methods=["POST"])
 def research():
-    """启动热门榜调研"""
+    """启动行业数据调研"""
     if _research_status["running"]:
         return jsonify({"error": "调研任务正在进行中，请稍后再试"})
 
     data = request.json
-    user_idea = data.get("idea", "").strip()
+    user_topic = data.get("topic", "").strip()
+    category = data.get("category", "all")  # hotlist / trend / industry / community / youtube / all
 
     thread = threading.Thread(
         target=_research_worker,
-        args=(user_idea,),
+        args=(user_topic, category),
         daemon=True,
     )
     thread.start()

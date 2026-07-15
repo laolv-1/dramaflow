@@ -347,19 +347,29 @@
             <div class="key-status" id="keyStatus"></div>
         </div>
 
-        <!-- 热门榜调研 -->
+        <!-- 行业数据调研 -->
         <div class="card">
-            <h2>热门榜调研</h2>
+            <h2>行业数据调研</h2>
             <p style="font-size:12px;color:#666;margin-bottom:12px;">
-                调研抖音/TikTok/快手等平台的热门短剧题材，为策划案提供市场数据支撑
+                采集微博热搜、百度指数、新榜、B站等18个免费数据源，为策划案提供市场数据支撑
             </p>
             <div class="form-group" style="margin-bottom:12px;">
-                <label>题材方向（可选，留空则做通用调研）</label>
-                <input type="text" id="researchTopic" placeholder="例如：蛇王在世、重生复仇、闪婚霸总...">
+                <label>调研主题（可选，留空则做通用调研）</label>
+                <input type="text" id="researchTopic" placeholder="例如：AI短剧、新能源汽车、美妆品牌...">
+            </div>
+            <div class="form-group" style="margin-bottom:12px;">
+                <label>数据源类别</label>
+                <div class="mode-switch" style="margin-bottom:0;">
+                    <div class="mode-btn active" onclick="switchResearchCategory('all')" id="catAllBtn">全量</div>
+                    <div class="mode-btn" onclick="switchResearchCategory('hotlist')" id="catHotlistBtn">热点榜</div>
+                    <div class="mode-btn" onclick="switchResearchCategory('trend')" id="catTrendBtn">搜索趋势</div>
+                    <div class="mode-btn" onclick="switchResearchCategory('industry')" id="catIndustryBtn">行业数据</div>
+                    <div class="mode-btn" onclick="switchResearchCategory('community')" id="catCommunityBtn">内容社区</div>
+                </div>
             </div>
             <div class="research-section">
                 <button class="btn btn-primary" id="researchBtn" onclick="startResearch()">
-                    🔍 调研热门榜
+                    🔍 开始调研
                 </button>
                 <span id="researchProgress" style="font-size:13px;color:#888;"></span>
             </div>
@@ -471,6 +481,7 @@
     <script>
         let currentMode = 'theme';
         let currentInputType = 'theme';  // theme / novel
+        let currentResearchCategory = 'all';  // all / hotlist / trend / industry / community / youtube
         let statusCheckInterval = null;
         let researchCheckInterval = null;
         let lastResearchResult = null;
@@ -707,6 +718,16 @@
 
         // ========== 调研功能 ==========
 
+        // 切换调研类别
+        function switchResearchCategory(cat) {
+            currentResearchCategory = cat;
+            document.getElementById('catAllBtn').classList.toggle('active', cat === 'all');
+            document.getElementById('catHotlistBtn').classList.toggle('active', cat === 'hotlist');
+            document.getElementById('catTrendBtn').classList.toggle('active', cat === 'trend');
+            document.getElementById('catIndustryBtn').classList.toggle('active', cat === 'industry');
+            document.getElementById('catCommunityBtn').classList.toggle('active', cat === 'community');
+        }
+
         // 启动调研
         async function startResearch() {
             const btn = document.getElementById('researchBtn');
@@ -719,7 +740,10 @@
                 const resp = await fetch('/api/research', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ idea: document.getElementById('researchTopic').value.trim() })
+                    body: JSON.stringify({
+                        topic: document.getElementById('researchTopic').value.trim(),
+                        category: currentResearchCategory
+                    })
                 });
                 const data = await resp.json();
                 if (data.error) {
@@ -789,12 +813,12 @@
 
             let html = '';
 
-            // 热门关键词
-            const keywords = result.hot_keywords || [];
-            if (keywords.length > 0) {
-                html += '<div class="section"><h4>🔥 热门题材 TOP10</h4><ul>';
-                for (const kw of keywords.slice(0, 10)) {
-                    html += `<li><strong>${escapeHtml(kw.keyword)}</strong>: 出现 ${kw.frequency} 次</li>`;
+            // 热门词汇
+            const words = result.hot_words || [];
+            if (words.length > 0) {
+                html += '<div class="section"><h4>🔥 热门词汇 TOP10</h4><ul>';
+                for (const kw of words.slice(0, 10)) {
+                    html += `<li><strong>${escapeHtml(kw.word)}</strong>: 出现 ${kw.count} 次</li>`;
                 }
                 html += '</ul></div>';
             }
