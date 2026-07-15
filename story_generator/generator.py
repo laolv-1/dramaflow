@@ -27,12 +27,12 @@ class EpisodeGenerator:
     - 策划案生成：deepseek-v4-flash（结构化输出，成本低）
     """
 
-    # 爆款短剧核心规则 - 注入SYSTEM_PROMPT
-    VIRAL_RULES = """
+    # 爆款短剧核心规则（不含固定受众，受众从用户输入动态获取）
+    VIRAL_RULES_TEMPLATE = """
 
 【爆款短剧核心规则 - 必须严格遵守】
-1. 题材公式：重生+复仇+逆袭 = 最高完播率；大女主+权谋 = 最高付费转化
-2. 节奏标准：每集1-2分钟，无注水内容，每8-12秒一个情绪点
+1. 题材公式：{genre_formula}
+2. 节奏标准：每集{duration}，无注水内容，每8-12秒一个情绪点
 3. 钩子体系：
    - 开头3秒：视觉冲击或戏剧性台词（决定滑走率）
    - 集尾3-5秒：最大悬念（触发下一集点击）
@@ -40,8 +40,21 @@ class EpisodeGenerator:
 4. 情绪工程：每集必须有情绪曲线（平静→紧张→反转→释放→悬念）
 5. 微反转：每集至少2-3个迷你反转，不只是大情节反转
 6. 台词标准：每集至少1句可传播的金句/爽句
-7. 受众定位：核心付费人群30-45岁女性，兼顾18-35岁年轻群体
+7. 受众定位：{audience}
 """
+
+    # 题材公式映射（根据题材动态选择）
+    GENRE_FORMULAS = {
+        "玄幻修仙": "重生+复仇+修仙 = 最高完播率",
+        "都市": "职场+逆袭+情感 = 最高付费转化",
+        "言情": "甜宠+虐恋+反转 = 最高互动率",
+        "悬疑": "推理+反转+揭秘 = 最高留存率",
+        "科幻": "未来+危机+生存 = 最高讨论度",
+        "动漫": "热血+成长+羁绊 = 最高粉丝粘性",
+        "历史": "权谋+争霸+传奇 = 最高完播率",
+        "恐怖": "惊悚+解谜+逃生 = 最高分享率",
+        "其他": "强冲突+快节奏+情绪张力 = 最高完播率",
+    }
 
     # 默认系统prompt（原创方向/故事文本用）
     SYSTEM_PROMPT = """你是一个专业的短剧编剧和策划师。你的任务是为用户的故事生成完整的短剧策划案。
@@ -242,7 +255,9 @@ class EpisodeGenerator:
 
     def generate_from_story(self, story_text: str, episode_count: int = 12,
                              total_episodes: int = 80,
-                             research_context: Optional[str] = None) -> Dict[str, Any]:
+                             research_context: Optional[str] = None,
+                             genre: str = "其他",
+                             target_audience: Optional[str] = None) -> Dict[str, Any]:
         """
         从故事文本生成完整策划案
         Args:
@@ -250,44 +265,48 @@ class EpisodeGenerator:
             episode_count: 每部剧集数
             total_episodes: 总集数
             research_context: 调研结果文本（可选，注入到prompt中）
+            genre: 题材类型（动态选择爆款公式）
+            target_audience: 目标受众（从用户输入获取，不硬编码）
         Returns:
             策划案JSON
         """
-        viral_rules = self.VIRAL_RULES if research_context else ""
+        viral_rules = self._build_viral_rules(genre, target_audience)
         user_prompt = f"""请为以下故事生成完整的短剧策划案：
 
 故事内容：
-{story_text}{research_context}
+{story_text}
 {'【市场趋势参考】' + research_context if research_context else ''}
 
 要求：
 - 每部 {episode_count} 集
 - 总共 {total_episodes} 集
 - 每集时长约2分钟
-- 目标受众：18-35岁
-- 视觉风格：写实电影感
+- 题材：{genre}
+{f'- 目标受众：{target_audience}' if target_audience else ''}
 {viral_rules}
 请生成第1集的完整策划案（包含所有角色、场景、提示词）。
 """
 
         return self._call_api(user_prompt)
 
-    def generate_from_theme(self, theme: str, genre: str = "都市",
+    def generate_from_theme(self, theme: str, genre: str = "其他",
                              episode_count: int = 12,
                              total_episodes: int = 80,
-                             research_context: Optional[str] = None) -> Dict[str, Any]:
+                             research_context: Optional[str] = None,
+                             target_audience: Optional[str] = None) -> Dict[str, Any]:
         """
         从故事主题生成策划案
         Args:
             theme: 故事主题（如"重生复仇"、"穿越修仙"）
-            genre: 题材类型
+            genre: 题材类型（动态选择爆款公式）
             episode_count: 每部剧集数
             total_episodes: 总集数
             research_context: 调研结果文本（可选）
+            target_audience: 目标受众（从用户输入获取，不硬编码）
         Returns:
             策划案JSON
         """
-        viral_rules = self.VIRAL_RULES if research_context else ""
+        viral_rules = self._build_viral_rules(genre, target_audience)
         user_prompt = f"""请基于以下主题生成完整的短剧策划案：
 
 - 题材：{genre}
@@ -295,13 +314,22 @@ class EpisodeGenerator:
 - 每部 {episode_count} 集
 - 总共 {total_episodes} 集
 - 每集时长约2分钟
-- 目标受众：18-35岁
-- 视觉风格：写实电影感
+{f'- 目标受众：{target_audience}' if target_audience else ''}
 {research_context + '\n' if research_context else ''}{viral_rules}
 请生成第1集的完整策划案（包含所有角色、场景、提示词）。
 """
 
         return self._call_api(user_prompt)
+
+    def _build_viral_rules(self, genre: str, target_audience: Optional[str] = None) -> str:
+        """根据题材和目标受众动态构建爆款规则"""
+        formula = self.GENRE_FORMULAS.get(genre, self.GENRE_FORMULAS["其他"])
+        audience = target_audience or f"{genre}题材对应的目标受众"
+        return self.VIRAL_RULES_TEMPLATE.format(
+            genre_formula=formula,
+            audience=audience,
+            duration="1-2分钟",
+        )
 
     def generate_from_novel(self, novel_chapter: str, episode_count: int = 12,
                              total_episodes: int = 80) -> Dict[str, Any]:
@@ -375,6 +403,7 @@ class EpisodeGenerator:
             episode_count=episode_count,
             total_episodes=total_episodes,
             research_context=research_text,
+            target_audience=None,  # 由LLM根据题材和调研结果动态推断
         )
 
     def _call_api(self, user_prompt: str, system_prompt: Optional[str] = None) -> Dict[str, Any]:
