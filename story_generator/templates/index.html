@@ -353,6 +353,10 @@
             <p style="font-size:12px;color:#666;margin-bottom:12px;">
                 调研抖音/TikTok/快手等平台的热门短剧题材，为策划案提供市场数据支撑
             </p>
+            <div class="form-group" style="margin-bottom:12px;">
+                <label>题材方向（可选，留空则做通用调研）</label>
+                <input type="text" id="researchTopic" placeholder="例如：蛇王在世、重生复仇、闪婚霸总...">
+            </div>
             <div class="research-section">
                 <button class="btn btn-primary" id="researchBtn" onclick="startResearch()">
                     🔍 调研热门榜
@@ -715,7 +719,7 @@
                 const resp = await fetch('/api/research', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ idea: document.getElementById('promptText').value.trim() })
+                    body: JSON.stringify({ idea: document.getElementById('researchTopic').value.trim() })
                 });
                 const data = await resp.json();
                 if (data.error) {
@@ -788,9 +792,9 @@
             // 热门关键词
             const keywords = result.hot_keywords || [];
             if (keywords.length > 0) {
-                html += '<div class="section"><h4>🔥 热门关键词 TOP10</h4><ul>';
-                for (const kw of keywords) {
-                    html += `<li><strong>${kw.keyword}</strong>: 出现 ${kw.frequency} 次</li>`;
+                html += '<div class="section"><h4>🔥 热门题材 TOP10</h4><ul>';
+                for (const kw of keywords.slice(0, 10)) {
+                    html += `<li><strong>${escapeHtml(kw.keyword)}</strong>: 出现 ${kw.frequency} 次</li>`;
                 }
                 html += '</ul></div>';
             }
