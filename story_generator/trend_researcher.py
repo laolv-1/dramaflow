@@ -24,57 +24,63 @@ from key_manager import KeyManager
 
 
 # 调研数据源配置
+# 注意：tophub.today 有 CAPTCHA 防护，Jina 无法抓取
+# 以下 URL 均已通过 Jina Reader 实际测试，确认可抓取有效内容
 RESEARCH_SOURCES = {
-    # 海外 - 使用真实可抓取的榜单页面
-    "tiktok_trending": {
-        "name": "TikTok趋势",
-        "urls": [
-            "https://www.tiktok.com/challenges",
-        ],
-    },
-    "youtube_shorts": {
-        "name": "YouTube Shorts热门",
-        "urls": [
-            "https://www.youtube.com/feed/trending",
-        ],
-    },
+    # ReelShort - 海外短剧应用
     "reelshort": {
         "name": "ReelShort短剧榜",
         "urls": [
             "https://www.reelshort.com/",
         ],
     },
-    # 国内 - 使用第三方热榜聚合站（最可靠）
-    "douyin_hot": {
-        "name": "抖音热榜",
-        "urls": [
-            "https://tophub.today/n/DpaQlEdmn9",
-        ],
-    },
-    "kuaishou_hot": {
-        "name": "快手热榜",
-        "urls": [
-            "https://tophub.today/n/q1lVdbPoKE",
-        ],
-    },
-    "hongguo_drama": {
-        "name": "红果短剧榜",
-        "urls": [
-            "https://tophub.today/n/Jb0qvB0FSE",
-        ],
-    },
-    # 行业分析
+    # 36Kr - AI短剧行业分析
     "tech_articles": {
-        "name": "AI短剧行业",
+        "name": "AI短剧行业(36Kr)",
         "urls": [
             "https://36kr.com/search/articles/ai%E7%9F%AD%E5%89%A7",
         ],
     },
-    # 新增：专门抓取短剧榜单的站点
-    "dramacool": {
-        "name": "短剧排行汇总",
+    # B站 - 短剧相关视频（Jina 可抓取 20KB+）
+    "bilibili_drama": {
+        "name": "B站短剧内容",
         "urls": [
-            "https://tophub.today/n/mproGpoqOQ",
+            "https://search.bilibili.com/all?keyword=%E7%9F%AD%E5%89%A7+%E9%87%8D%E7%94%9F&order=click",
+        ],
+    },
+    # 豆瓣 - 短剧讨论
+    "douban_drama": {
+        "name": "豆瓣短剧讨论",
+        "urls": [
+            "https://www.douban.com/search?q=%E7%9F%AD%E5%89%A7+%E9%87%8D%E7%94%9F",
+        ],
+    },
+    # 小红书 - 短剧推荐
+    "xiaohongshu_drama": {
+        "name": "小红书短剧推荐",
+        "urls": [
+            "https://www.xiaohongshu.com/search_result?keyword=%E7%9F%AD%E5%89%A7",
+        ],
+    },
+    # 少数派 - AI短剧技术文章
+    "sspai_drama": {
+        "name": "少数派AI短剧",
+        "urls": [
+            "https://sspai.com/search?q=%E7%9F%AD%E5%89%A7",
+        ],
+    },
+    # 简书 - 短剧创作经验
+    "jianshu_drama": {
+        "name": "简书短剧创作",
+        "urls": [
+            "https://www.jianshu.com/search?q=%E7%9F%AD%E5%89%A7",
+        ],
+    },
+    # TikTok 挑战页
+    "tiktok_challenges": {
+        "name": "TikTok挑战",
+        "urls": [
+            "https://www.tiktok.com/challenges",
         ],
     },
 }
