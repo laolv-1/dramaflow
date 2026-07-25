@@ -26,12 +26,16 @@ from pathlib import Path
 class DouyinTTS:
     MOSS_API_BASE = "https://api.mosi.cn/v1"
     DEFAULT_VOICE_ID = "06f9aa7a-654d-4821-8d67-108377968c35"
+    # 抖音语录默认男声（沉稳有力，带货/励志风格）
+    QUOTE_DEFAULT_VOICE = "06f9aa7a-654d-4821-8d67-108377968c35"
+    # 克隆音色 ID（通过 POST /v1/audio/voices 创建）
+    CLONED_VOICE_ID = "25a57cf4-7257-4229-87d1-3f3623266f6a"
     MODEL = "moss-tts"
     KEY_VAR = "MOSS_API_KEY"
 
     def __init__(self, api_key=None):
         self.api_key = api_key or self._load_key()
-        self.default_voice_id = self.DEFAULT_VOICE_ID
+        self.default_voice_id = self.QUOTE_DEFAULT_VOICE
 
     # ---- helpers ---------------------------------------------------------
 
@@ -42,14 +46,10 @@ class DouyinTTS:
         for p in [".env_moss", str(Path.home() / ".moss_tts_key.txt")]:
             if os.path.exists(p):
                 with open(p, "r", encoding="utf-8") as f:
-                    raw = "".join(c for c in f.read().strip() if 32 <= ord(c) <= 126)
-                    # 跳过 TTS_VOICE_ID=xxx 这种非 key 行
-                    for line in raw.splitlines():
+                    for line in f:
+                        line = line.strip()
                         if line.startswith("MOSS_API_KEY="):
-                            return line.split("=", 1)[1].strip()
-                    if raw and "MOSS_API_KEY" not in raw:
-                        # .env_moss 里直接就是 key
-                        return raw
+                            return line.split("=", 1)[1].strip().strip("\"'")
         return ""
 
     def _post_json(self, endpoint, payload):
@@ -157,76 +157,88 @@ class DouyinTTS:
     # ---- 高阶方法: 一键式 workflow ----------------------------------------
 
     def make_douyin_quote(self, text, output_file="douyin_quote.mp3",
-                          use_cloned_voice=False, speed=1.0):
+                          speed=1.0, force_cloned_voice=False):
         """
-        一键生成抖音励志语录音频
+        一键生成抖音语录音频
 
         Args:
-            text: 文案内容（建议80-150字，中年男声口吻）
+            text: 文案内容（建议80-200字）
             output_file: 输出音频路径
-            use_cloned_voice: 是否尝试用克隆音色（需要先有可用的克隆voice_id）
-            speed: 语速
+            speed: 语速（推荐 0.9 沉稳有力）
+            force_cloned_voice: 强制使用克隆音色
         """
         print(f"{'='*50}")
-        print(f" 抖音励志语录 TTS 生成")
+        print(f" 抖音语录 TTS 生成")
         print(f"{'='*50}")
         print(f"文案长度: {len(text)} chars")
         print(f"语速: {speed}")
 
-        voice_id = None
-        if use_cloned_voice:
-            # 查找已有克隆音色
+        # 优先使用克隆音色（带货/励志风格需要男声）
+        if force_cloned_voice:
+            voice_id = self.CLONED_VOICE_ID
+            print(f"使用克隆音色: {voice_id[:20]}...")
+        else:
+            # 尝试用克隆音色，如果失败则回退到默认男声
             try:
                 voices = self.list_voices()
-                cloned = [v for v in voices if v.get("id") != self.DEFAULT_VOICE_ID]
+                cloned = [v for v in voices if v.get("id") == self.CLONED_VOICE_ID]
                 if cloned:
-                    voice_id = cloned[-1]["id"]
-                    print(f"使用最近克隆音色: {voice_id[:20]}...")
+                    voice_id = self.CLONED_VOICE_ID
+                    print(f"检测到克隆音色: {voice_id[:20]}...")
                 else:
-                    print("没有克隆音色，将使用预设音色")
+                    voice_id = self.default_voice_id
+                    print(f"使用默认男声: {voice_id[:20]}...")
             except Exception as e:
-                print(f"无法获取音色列表: {e}，将使用预设音色")
+                voice_id = self.default_voice_id
+                print(f"无法获取音色列表，使用默认男声: {e}")
 
         return self.synthesize(text, output_file, voice_id=voice_id, speed=speed)
 
 
 # ---------------------------------------------------------------------------
-# 预设语录模板库
+# 预设语录模板库 - 直白扎心励志风（带货/短视频/茶桌背景）
 # ---------------------------------------------------------------------------
 
 QUOTE_TEMPLATES = {
-    "茶桌励志": (
-        "我叫{name}，今年{age}。{past_hardship}亲戚笑我说你{mock_question}我没吭声，就咬着牙干了。"
-        "{current_success}人生没有白走的路，每一步都算数。\n"
-        "只要你肯下狠心，老天爷从不辜负老实人。"
+    "扎心励志": (
+        "没有人帮你，你就自己帮自己。\n"
+        "你连睡觉都在刷手机，凭什么比别人强？\n"
+        "不逼自己一把，你永远不知道自己多优秀。\n"
+        "别抱怨了，成年人的世界没有容易二字。\n"
+        "你穷不是因为没有机会，是因为你不努力。\n"
+        "弱者的眼泪只会被嘲笑，强者的汗水才会换来尊重。\n"
+        "今天你看不起我，明天你会高攀不起。\n"
+        "想，都是问题；做，才有答案。"
     ),
-    "工地逆袭": (
-        "三十岁那年我还在工地搬砖，媳妇跟我说了一句话，让我泪流满面。\n"
-        "她说你没房没车，咱家连个像样的客厅都没有。我没说话，蹲在门口抽了半包烟。\n"
-        "可后来我用一双手、一副肩膀，{years}年打下来一套房。\n"
-        "生活不是看你起点多高，而是看你有没有咬牙不认输的劲头。"
+    "翻身语录": (
+        "你现在偷的懒，都会变成打脸的巴掌。\n"
+        "别在最该拼搏的年纪选择了安逸。\n"
+        "你现在的舒服，是你未来的痛苦。\n"
+        "没有人会同情一个不努力的人。\n"
+        "你不好好拼，就有人替你拼爹。\n"
+        "这个世界从不公平，但你可以改变自己的位置。\n"
+        "别等了，等你有钱了，机会早没了。\n"
+        "成功没有快车道，失败没有后路。"
     ),
-    "农村奋斗": (
-        "我是农村出来的孩子，高考落榜那年回家种地。村里人都说我这辈子完了。\n"
-        "我没理会，白天种地晚上学技术，三年后搞起了大棚种植。\n"
-        "现在我有自己的农场，请了十几个工人。\n"
-        "我想对所有人说，只要你肯干，老天爷从不亏待努力的人。"
+    "搞钱思维": (
+        "穷人存钱，富人投资，你选哪个？\n"
+        "你的工资永远追不上通胀，不学习就是不赚钱。\n"
+        "你以为的稳定，是最大的风险。\n"
+        "你不理财，财就不理你——别找借口说没钱可理。\n"
+        "钱不是省出来的，是赚出来的。\n"
+        "你舍不得花钱学习，一辈子就只能花冤枉钱。\n"
+        "穷人的时间不值钱，富人的时间才值钱。\n"
+        "不投资大脑的人，最穷。"
     ),
 }
 
 
-def sample_quote(template_name="茶桌励志", **kwargs):
+def sample_quote(template_name="扎心励志", **kwargs):
     """获取预设语录模板的示例文本"""
     if template_name not in QUOTE_TEMPLATES:
         raise ValueError(f"未知模板: {template_name}，可选: {list(QUOTE_TEMPLATES.keys())}")
     # 合并 kwargs（用户传的参数优先）
-    defaults = {
-        "name": "李明", "age": "三十八",
-        "past_hardship": "从工地辞职那天兜里只剩八百块钱。",
-        "mock_question": "跑回来种地，图啥？",
-        "current_success": "十年后我建了三个大棚，给儿子买了两套房。",
-        "years": "十",
-    }
+    defaults = {}
     defaults.update(kwargs)
     text = QUOTE_TEMPLATES[template_name].format(**defaults)
     return text
@@ -243,7 +255,7 @@ if __name__ == "__main__":
     parser.add_argument("-t", "--text", help="文案内容（文字）")
     parser.add_argument("-o", "--output", default="douyin_quote.mp3", help="输出文件路径")
     parser.add_argument("-s", "--speed", type=float, default=1.0, help="语速（0.5-2.0）")
-    parser.add_argument("--clone", action="store_true", help="使用克隆音色（需先有克隆音色）")
+    parser.add_argument("--force-clone", action="store_true", help="强制使用克隆音色（优先于默认男声）")
     parser.add_argument("--template", choices=list(QUOTE_TEMPLATES.keys()),
                         help="使用预设语录模板")
     parser.add_argument("--make-ref", action="store_true", help="生成一段参考音频用于语音克隆")
@@ -279,7 +291,7 @@ if __name__ == "__main__":
     result = tts.make_douyin_quote(
         text=args.text,
         output_file=args.output,
-        use_cloned_voice=args.clone,
+        force_cloned_voice=args.force_clone,
         speed=args.speed,
     )
     print(f"\n完成! 文件: {result['file']}")

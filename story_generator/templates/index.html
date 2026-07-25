@@ -36,6 +36,36 @@
             font-size: 14px;
         }
 
+        /* ========== Tab 导航 ========== */
+        .tab-nav {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 6px;
+            border: 1px solid #2a2a4a;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 14px 20px;
+            background: transparent;
+            border: none;
+            border-radius: 8px;
+            color: #888;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .tab-btn:hover { color: #ccc; background: #2a2a4a; }
+        .tab-btn.active {
+            color: #fff;
+            background: #6c63ff;
+        }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
         /* 设置区域 */
         .card {
             background: #1a1a2e;
@@ -526,19 +556,30 @@
 <body>
     <div class="container">
         <header>
-            <h1>DramaFlow 策划案生成器</h1>
-            <p>输入故事主题，AI自动生成完整短剧策划案</p>
+            <h1>DramaFlow 工作台</h1>
+            <p>策划案生成 | 图+TTS合成 | 科普视频（预留）</p>
         </header>
 
-        <!-- API Key 设置 -->
-        <div class="card">
-            <h2>API Key 设置</h2>
-            <div class="key-input-row">
-                <input type="password" id="apiKeyInput" placeholder="输入 DeepSeek API Key">
-                <button class="btn btn-success btn-small" onclick="saveApiKey()">保存</button>
-            </div>
-            <div class="key-status" id="keyStatus"></div>
+        <!-- Tab 导航 -->
+        <div class="tab-nav">
+            <button class="tab-btn active" onclick="switchTab('shortdrama')">🎬 短剧策划案</button>
+            <button class="tab-btn" onclick="switchTab('audiobook')">📱 图+TTS合成</button>
+            <button class="tab-btn" disabled title="后续新增">🔬 科普视频</button>
         </div>
+
+        <!-- ===== Tab 1: 短剧策划案 ===== -->
+        <div id="panel-shortdrama" class="tab-panel active">
+            <input type="hidden" id="generateMode" value="fromTheme">
+
+            <!-- API Key 设置 -->
+            <div class="card">
+                <h2>API Key 设置</h2>
+                <div class="key-input-row">
+                    <input type="password" id="apiKeyInput" placeholder="输入 DeepSeek API Key">
+                    <button class="btn btn-success btn-small" onclick="saveApiKey()">保存</button>
+                </div>
+                <div class="key-status" id="keyStatus"></div>
+            </div>
 
         <!-- TTS 配音设置 -->
         <div class="tts-card">
@@ -557,28 +598,31 @@
             </div>
             <button class="btn btn-small btn-success" onclick="saveTtsSettings()" style="margin-top:4px;">保存配音设置</button>
         </div>
+    </div>
+    <!-- End panel-shortdrama (api key + tts settings only) -->
 
-        <!-- 抖音语录 TTS 工具 -->
+    <!-- ===== Tab 2: 图+TTS合成 ===== -->
+    <div id="panel-audiobook" class="tab-panel">
         <div class="card">
-            <h2 style="font-size:16px;color:#aaa;margin-bottom:16px;font-weight:500;">📱 抖音语录 TTS</h2>
-            <p style="color:#888;font-size:13px;margin-bottom:16px;">茶桌背景图 + 中年男声励志语录短视频</p>
+            <h2 style="font-size:16px;color:#aaa;margin-bottom:4px;font-weight:500;">📱 图+TTS合成</h2>
+            <p style="color:#888;font-size:13px;margin-bottom:16px;">扎心语录/带货短视频 — 男声配音 + 背景图</p>
 
             <!-- 模板选择 -->
-            <div class="form-row" style="margin-bottom:12px;">
-                <label style="display:block;margin-bottom:6px;color:#ccc;font-size:13px;">预设模板:</label>
-                <select id="douyinTemplate" onchange="loadDouyinQuote()" style="width:100%;padding:8px;background:#2a2a4a;border:1px solid #3a3a5a;color:#fff;border-radius:6px;">
+            <div class="form-group" style="margin-bottom:12px;">
+                <label>预设模板</label>
+                <select id="douyinTemplate" onchange="loadDouyinQuote()" style="width:100%;padding:10px 14px;background:#0f0f1a;border:1px solid #333;border-radius:8px;color:#e0e0e0;font-size:14px;">
                     <option value="">选择模板...</option>
-                    <option value="茶桌励志">茶桌励志</option>
-                    <option value="工地逆袭">工地逆袭</option>
-                    <option value="农村奋斗">农村奋斗</option>
+                    <option value="扎心励志">扎心励志</option>
+                    <option value="翻身语录">翻身语录</option>
+                    <option value="搞钱思维">搞钱思维</option>
                 </select>
             </div>
 
             <!-- 文案输入 -->
-            <div class="form-row" style="margin-bottom:12px;">
-                <label style="display:block;margin-bottom:6px;color:#ccc;font-size:13px;">文案内容:</label>
-                <textarea id="douyinText" rows="5" placeholder="输入或编辑励志语录文案（建议80-150字，中年男声口吻）"
-                          style="width:100%;padding:8px;background:#2a2a4a;border:1px solid #3a3a5a;color:#fff;border-radius:6px;resize:vertical;font-size:14px;"></textarea>
+            <div class="form-group" style="margin-bottom:12px;">
+                <label>文案内容</label>
+                <textarea id="douyinText" rows="5" placeholder="输入或编辑语录文案（建议80-200字）"
+                          style="width:100%;padding:10px 14px;background:#0f0f1a;border:1px solid #333;border-radius:8px;color:#e0e0e0;font-size:14px;resize:vertical;font-family:inherit;"></textarea>
                 <span id="douyinCharCount" style="color:#666;font-size:12px;margin-top:4px;display:block;">0 字</span>
             </div>
 
@@ -593,18 +637,16 @@
 
             <!-- 克隆音色 -->
             <div style="margin-bottom:16px;">
-                <label style="color:#ccc;font-size:13px;">
-                    <input type="checkbox" id="douyinCloneVoice" style="margin-right:6px;">
-                    使用克隆音色（需先有克隆音色）
+                <label style="color:#ccc;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;">
+                    <input type="checkbox" id="douyinCloneVoice" checked style="width:auto;">
+                    默认使用克隆/男声音色（可取消）
                 </label>
             </div>
 
-            <button class="btn btn-success" onclick="generateDouyinQuote()" style="width:100%;">
-                生成音频
-            </button>
+            <button class="btn btn-primary" onclick="generateDouyinQuote()" style="width:100%;">生成音频</button>
             <div id="douyinResult" style="margin-top:12px;display:none;"></div>
         </div>
-
+    </div>
         <!-- 行业数据调研 -->
         <div class="card">
             <h2>行业数据调研</h2>
@@ -826,7 +868,7 @@
                 <div id="ttsFileList" class="tts-file-list"></div>
             </div>
         </div>
-    </div>
+    </div><!-- End panel-shortdrama -->
 
     <script>
         let currentMode = 'theme';
@@ -1633,6 +1675,22 @@
             container.innerHTML = html;
         }
 
+        // ========== Tab 切换 ==========
+        function switchTab(name) {
+            document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+            document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+            var btns = document.querySelectorAll('.tab-btn');
+            var map = ['shortdrama', 'audiobook'];
+            for (var i = 0; i < map.length; i++) {
+                if (map[i] === name && btns[i]) {
+                    btns[i].classList.add('active');
+                    break;
+                }
+            }
+            var mainPanel = document.getElementById('panel-' + name);
+            if (mainPanel) mainPanel.classList.add('active');
+        }
+
         // ========== 抖音语录 TTS ==========
         function loadDouyinQuote() {
             const sel = document.getElementById('douyinTemplate');
@@ -1672,7 +1730,7 @@
                 const resp = await fetch('/api/douyin_tts/synthesize', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ text, template, speed, use_cloned_voice: useClone }),
+                    body: JSON.stringify({ text, template, speed, force_cloned_voice: useClone }),
                 });
                 const data = await resp.json();
                 if (data.error) throw new Error(data.error);
