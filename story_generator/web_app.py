@@ -1245,25 +1245,32 @@ def synthesize_episode():
 
 
 # ========== 抖音语录 TTS 工具 ==========
-from tts_douyin_quote import DouyinTTS, QUOTE_TEMPLATES, sample_quote as _sample_quote
 
-_douyin_tts = None
 _douyin_tasks = {}  # task_id -> {status, result}
 
-def _get_douyin_tts() -> DouyinTTS:
-    global _douyin_tts
-    if _douyin_tts is None:
-        _douyin_tts = DouyinTTS()
-    return _douyin_tts
+_douyin_tts_module = None
+
+def _get_douyin_mod():
+    """Lazy import tts_douyin_quote module (once)"""
+    global _douyin_tts_module
+    if _douyin_tts_module is None:
+        from tts_douyin_quote import DouyinTTS, QUOTE_TEMPLATES, sample_quote
+        _douyin_tts_module = {
+            "DouyinTTS": DouyinTTS,
+            "QUOTE_TEMPLATES": QUOTE_TEMPLATES,
+            "sample_quote": sample_quote,
+        }
+    return _douyin_tts_module
 
 
 @app.route("/api/douyin_tts/templates")
 def douyin_tts_templates():
     """获取预设语录模板列表"""
+    mod = _get_douyin_mod()
     templates = {}
-    for name in QUOTE_TEMPLATES:
+    for name in mod["QUOTE_TEMPLATES"]:
         try:
-            templates[name] = _sample_quote(name)
+            templates[name] = mod["sample_quote"](name)
         except Exception:
             templates[name] = f"[{name}模板]"
     return jsonify({"templates": templates})
@@ -1276,15 +1283,16 @@ def douyin_tts_synthesize():
     text = data.get("text", "").strip()
     template = data.get("template")
     output_name = data.get("output", "douyin_quote.mp3")
-    speed = float(data.get("speed", 1.0))
-    use_clone = bool(data.get("use_cloned_voice", False))
+    speed = float(data.get("speed", 0.9))
+    force_clone = bool(data.get("force_cloned_voice", True))
 
     if not text and not template:
         return jsonify({"error": "必须提供 text 或 template"}), 400
 
     if template:
         try:
-            text = _sample_quote(template)
+            mod = _get_douyin_mod()
+            text = mod["sample_quote"](template)
         except Exception as e:
             return jsonify({"error": f"模板错误: {e}"}), 400
 
@@ -1298,11 +1306,12 @@ def douyin_tts_synthesize():
         _douyin_tasks[task_id]["progress"] = 20
         _douyin_tasks[task_id]["message"] = "正在生成音频..."
         try:
-            tts = _get_douyin_tts()
+            mod = _get_douyin_mod()
+            tts = mod["DouyinTTS"]()
             out_path = str(BASE_DIR / "output" / output_name)
             result = tts.make_douyin_quote(
                 text=text, output_file=out_path,
-                use_cloned_voice=use_clone, speed=speed,
+                speed=speed, force_cloned_voice=force_clone,
             )
             _douyin_tasks[task_id]["status"] = "done"
             _douyin_tasks[task_id]["progress"] = 100
@@ -1314,8 +1323,12 @@ def douyin_tts_synthesize():
                 "duration_sec": result["duration_sec"],
             }
         except Exception as e:
+            import traceback
             _douyin_tasks[task_id]["status"] = "error"
-            _douyin_tasks[task_id]["message"] = str(e)
+            tb = traceback.format_exc()
+            msg = f"{str(e)}\n{tb}"
+            print(f"[DOUBIN_TTS_ERROR] {msg}")
+            _douyin_tasks[task_id]["message"] = msg[:2000]
 
     threading.Thread(target=_do_work, daemon=True).start()
     return jsonify({"task_id": task_id})
