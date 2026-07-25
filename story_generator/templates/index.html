@@ -625,7 +625,10 @@
                           style="width:100%;padding:10px 14px;background:#0f0f1a;border:1px solid #333;border-radius:8px;color:#e0e0e0;font-size:14px;resize:vertical;font-family:inherit;"></textarea>
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
                     <span id="douyinCharCount" style="color:#666;font-size:12px;">0 字</span>
-                    <button onclick="clearDouyinText()" style="background:none;border:1px solid #555;border-radius:4px;color:#aaa;padding:3px 10px;cursor:pointer;font-size:12px;">清空文案</button>
+                    <div style="display:flex;gap:8px;">
+                        <button onclick="refreshDouyinQuote()" id="refreshBtn" style="background:none;border:1px solid #555;border-radius:4px;color:#aaa;padding:3px 10px;cursor:pointer;font-size:12px;display:none;">换一批 🔄</button>
+                        <button onclick="clearDouyinText()" style="background:none;border:1px solid #555;border-radius:4px;color:#aaa;padding:3px 10px;cursor:pointer;font-size:12px;">清空 ✕</button>
+                    </div>
                 </div>
             </div>
 
@@ -1698,11 +1701,41 @@
         function clearDouyinText() {
             document.getElementById('douyinText').value = '';
             document.getElementById('douyinCharCount').textContent = '0 字';
+            document.getElementById('refreshBtn').style.display = 'none';
+        }
+
+        async function refreshDouyinQuote() {
+            const sel = document.getElementById('douyinTemplate');
+            if (!sel.value) return;
+            const btn = document.getElementById('refreshBtn');
+            btn.textContent = '加载中...';
+            try {
+                const resp = await fetch('/api/douyin_tts/randomize', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ template: sel.value }),
+                });
+                const data = await resp.json();
+                if (data.error) throw new Error(data.error);
+                document.getElementById('douyinText').value = data.text;
+                document.getElementById('douyinCharCount').textContent = data.length + ' 字';
+                document.getElementById('refreshBtn').textContent = '换一批 🔄';
+            } catch (e) {
+                alert('刷新失败: ' + e.message);
+                btn.textContent = '换一批 🔄';
+            }
         }
 
         function loadDouyinQuote() {
             const sel = document.getElementById('douyinTemplate');
-            if (!sel.value) return;
+            const refreshBtn = document.getElementById('refreshBtn');
+            if (!sel.value) {
+                refreshBtn.style.display = 'none';
+                return;
+            }
+            // 模板切换时自动加载（显示换一批按钮）
+            refreshBtn.style.display = 'inline-block';
+            refreshBtn.textContent = '加载中...';
             fetch('/api/douyin_tts/templates')
                 .then(r => r.json())
                 .then(data => {
@@ -1710,9 +1743,14 @@
                     if (text) {
                         document.getElementById('douyinText').value = text;
                         document.getElementById('douyinCharCount').textContent = text.length + ' 字';
+                        refreshBtn.textContent = '换一批 🔄';
+                    } else {
+                        refreshBtn.textContent = '换一批 🔄';
                     }
                 })
-                .catch(() => {});
+                .catch(() => {
+                    refreshBtn.textContent = '换一批 🔄';
+                });
         }
 
         document.getElementById('douyinText').addEventListener('input', function() {

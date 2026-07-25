@@ -1276,6 +1276,21 @@ def douyin_tts_templates():
     return jsonify({"templates": templates})
 
 
+@app.route("/api/douyin_tts/randomize", methods=["POST"])
+def douyin_tts_randomize():
+    """刷新语录 — 随机选择同一模板下的另一条"""
+    data = request.json or {}
+    template_name = data.get("template", "").strip()
+    if not template_name:
+        return jsonify({"error": "必须提供 template"}), 400
+    try:
+        mod = _get_douyin_mod()
+        text = mod["sample_quote"](template_name, randomize=True)
+        return jsonify({"text": text, "length": len(text)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/douyin_tts/synthesize", methods=["POST"])
 def douyin_tts_synthesize():
     """生成抖音语录音频（带进度查询）"""
