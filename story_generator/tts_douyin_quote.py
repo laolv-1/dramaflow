@@ -26,16 +26,12 @@ from pathlib import Path
 class DouyinTTS:
     MOSS_API_BASE = "https://api.mosi.cn/v1"
     DEFAULT_VOICE_ID = "06f9aa7a-654d-4821-8d67-108377968c35"
-    # 抖音语录默认男声（沉稳有力，带货/励志风格）
-    QUOTE_DEFAULT_VOICE = "06f9aa7a-654d-4821-8d67-108377968c35"
-    # 克隆音色 ID（通过 POST /v1/audio/voices 创建）
-    CLONED_VOICE_ID = "25a57cf4-7257-4229-87d1-3f3623266f6a"
     MODEL = "moss-tts"
     KEY_VAR = "MOSS_API_KEY"
 
     def __init__(self, api_key=None):
         self.api_key = api_key or self._load_key()
-        self.default_voice_id = self.QUOTE_DEFAULT_VOICE
+        self.default_voice_id = self.DEFAULT_VOICE_ID
 
     # ---- helpers ---------------------------------------------------------
 
@@ -156,43 +152,14 @@ class DouyinTTS:
 
     # ---- 高阶方法: 一键式 workflow ----------------------------------------
 
-    def make_douyin_quote(self, text, output_file="douyin_quote.mp3",
-                          speed=1.0, force_cloned_voice=False):
-        """
-        一键生成抖音语录音频
-
-        Args:
-            text: 文案内容（建议80-200字）
-            output_file: 输出音频路径
-            speed: 语速（推荐 0.9 沉稳有力）
-            force_cloned_voice: 强制使用克隆音色
-        """
+    def make_douyin_quote(self, text, output_file="douyin_quote.mp3", speed=1.0):
+        """一键生成抖音语录音频"""
+        vid = self.default_voice_id
         print(f"{'='*50}")
         print(f" 抖音语录 TTS 生成")
         print(f"{'='*50}")
-        print(f"文案长度: {len(text)} chars")
-        print(f"语速: {speed}")
-
-        # 优先使用克隆音色（带货/励志风格需要男声）
-        if force_cloned_voice:
-            voice_id = self.CLONED_VOICE_ID
-            print(f"使用克隆音色: {voice_id[:20]}...")
-        else:
-            # 尝试用克隆音色，如果失败则回退到默认男声
-            try:
-                voices = self.list_voices()
-                cloned = [v for v in voices if v.get("id") == self.CLONED_VOICE_ID]
-                if cloned:
-                    voice_id = self.CLONED_VOICE_ID
-                    print(f"检测到克隆音色: {voice_id[:20]}...")
-                else:
-                    voice_id = self.default_voice_id
-                    print(f"使用默认男声: {voice_id[:20]}...")
-            except Exception as e:
-                voice_id = self.default_voice_id
-                print(f"无法获取音色列表，使用默认男声: {e}")
-
-        return self.synthesize(text, output_file, voice_id=voice_id, speed=speed)
+        print(f"文案长度: {len(text)} chars | 语速: {speed} | 音色: {vid[:20]}...")
+        return self.synthesize(text, output_file, voice_id=vid, speed=speed)
 
 
 # ---------------------------------------------------------------------------

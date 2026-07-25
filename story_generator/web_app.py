@@ -1278,17 +1278,13 @@ def douyin_tts_templates():
 
 @app.route("/api/douyin_tts/randomize", methods=["POST"])
 def douyin_tts_randomize():
-    """刷新语录 — 随机选择同一模板下的另一条"""
-    data = request.json or {}
-    template_name = data.get("template", "").strip()
-    if not template_name:
-        return jsonify({"error": "必须提供 template"}), 400
-    try:
-        mod = _get_douyin_mod()
-        text = mod["sample_quote"](template_name, randomize=True)
-        return jsonify({"text": text, "length": len(text)})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    """随机获取一条语录（从所有模板中随机选）"""
+    mod = _get_douyin_mod()
+    import random
+    all_templates = list(mod["QUOTE_TEMPLATES"].keys())
+    name = random.choice(all_templates)
+    text = mod["sample_quote"](name, randomize=True)
+    return jsonify({"text": text, "length": len(text), "template": name})
 
 
 @app.route("/api/douyin_tts/synthesize", methods=["POST"])
@@ -1299,7 +1295,6 @@ def douyin_tts_synthesize():
     template = data.get("template")
     output_name = data.get("output", "douyin_quote.mp3")
     speed = float(data.get("speed", 0.9))
-    force_clone = bool(data.get("force_cloned_voice", True))
 
     if not text and not template:
         return jsonify({"error": "必须提供 text 或 template"}), 400
@@ -1324,10 +1319,7 @@ def douyin_tts_synthesize():
             mod = _get_douyin_mod()
             tts = mod["DouyinTTS"]()
             out_path = str(BASE_DIR / "output" / output_name)
-            result = tts.make_douyin_quote(
-                text=text, output_file=out_path,
-                speed=speed, force_cloned_voice=force_clone,
-            )
+            result = tts.make_douyin_quote(text=text, output_file=out_path, speed=speed,)
             _douyin_tasks[task_id]["status"] = "done"
             _douyin_tasks[task_id]["progress"] = 100
             _douyin_tasks[task_id]["message"] = "合成完成"

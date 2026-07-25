@@ -601,32 +601,21 @@
     </div>
     <!-- End panel-shortdrama (api key + tts settings only) -->
 
-    <!-- ===== Tab 2: 图+TTS合成 ===== -->
+    <!-- ===== Tab 2: 语录TTS合成 ===== -->
     <div id="panel-audiobook" class="tab-panel">
         <div class="card">
-            <h2 style="font-size:16px;color:#aaa;margin-bottom:4px;font-weight:500;">📱 图+TTS合成</h2>
-            <p style="color:#888;font-size:13px;margin-bottom:16px;">扎心语录/带货短视频 — 男声配音 + 背景图</p>
-
-            <!-- 模板选择 -->
-            <div class="form-group" style="margin-bottom:12px;">
-                <label>预设模板</label>
-                <select id="douyinTemplate" onchange="loadDouyinQuote()" style="width:100%;padding:10px 14px;background:#0f0f1a;border:1px solid #333;border-radius:8px;color:#e0e0e0;font-size:14px;">
-                    <option value="">选择模板...</option>
-                    <option value="扎心励志">扎心励志</option>
-                    <option value="翻身语录">翻身语录</option>
-                    <option value="沉默行动">沉默行动</option>
-                </select>
-            </div>
+            <h2 style="font-size:16px;color:#aaa;margin-bottom:4px;font-weight:500;">📱 语录 TTS 合成</h2>
+            <p style="color:#888;font-size:13px;margin-bottom:16px;">深夜茶桌旁说真话的中年男人 — 男声配音 + 背景图</p>
 
             <!-- 文案输入 -->
             <div class="form-group" style="margin-bottom:12px;">
-                <label>文案内容</label>
-                <textarea id="douyinText" rows="5" placeholder="选择模板后自动填充，或直接输入文案（建议80-200字）"
+                <label>语录文案</label>
+                <textarea id="douyinText" rows="6" placeholder="点击下方按钮随机生成，或直接输入文案（每条40-70字，自包含对仗句）"
                           style="width:100%;padding:10px 14px;background:#0f0f1a;border:1px solid #333;border-radius:8px;color:#e0e0e0;font-size:14px;resize:vertical;font-family:inherit;"></textarea>
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
                     <span id="douyinCharCount" style="color:#666;font-size:12px;">0 字</span>
                     <div style="display:flex;gap:8px;">
-                        <button onclick="refreshDouyinQuote()" id="refreshBtn" style="background:none;border:1px solid #555;border-radius:4px;color:#aaa;padding:3px 10px;cursor:pointer;font-size:12px;display:none;">换一批 🔄</button>
+                        <button onclick="randomizeDouyinQuote()" style="background:none;border:1px solid #555;border-radius:4px;color:#aaa;padding:3px 10px;cursor:pointer;font-size:12px;">换一批 🔄</button>
                         <button onclick="clearDouyinText()" style="background:none;border:1px solid #555;border-radius:4px;color:#aaa;padding:3px 10px;cursor:pointer;font-size:12px;">清空 ✕</button>
                     </div>
                 </div>
@@ -641,16 +630,10 @@
                 <span style="color:#888;font-size:12px;margin-left:8px;">推荐 0.9（沉稳有力）</span>
             </div>
 
-            <!-- 克隆音色 -->
-            <div style="margin-bottom:16px;">
-                <label style="color:#ccc;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;">
-                    <input type="checkbox" id="douyinCloneVoice" checked style="width:auto;">
-                    默认使用克隆/男声音色（可取消）
-                </label>
-            </div>
-
             <button class="btn btn-primary" onclick="generateDouyinQuote()" style="width:100%;">生成音频</button>
             <div id="douyinResult" style="margin-top:12px;display:none;"></div>
+        </div>
+    </div>
         </div>
     </div>
         <!-- 行业数据调研 -->
@@ -1701,56 +1684,22 @@
         function clearDouyinText() {
             document.getElementById('douyinText').value = '';
             document.getElementById('douyinCharCount').textContent = '0 字';
-            document.getElementById('refreshBtn').style.display = 'none';
         }
 
-        async function refreshDouyinQuote() {
-            const sel = document.getElementById('douyinTemplate');
-            if (!sel.value) return;
-            const btn = document.getElementById('refreshBtn');
-            btn.textContent = '加载中...';
+        async function randomizeDouyinQuote() {
             try {
                 const resp = await fetch('/api/douyin_tts/randomize', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ template: sel.value }),
+                    body: JSON.stringify({ template: '扎心励志' }),
                 });
                 const data = await resp.json();
                 if (data.error) throw new Error(data.error);
                 document.getElementById('douyinText').value = data.text;
                 document.getElementById('douyinCharCount').textContent = data.length + ' 字';
-                document.getElementById('refreshBtn').textContent = '换一批 🔄';
             } catch (e) {
                 alert('刷新失败: ' + e.message);
-                btn.textContent = '换一批 🔄';
             }
-        }
-
-        function loadDouyinQuote() {
-            const sel = document.getElementById('douyinTemplate');
-            const refreshBtn = document.getElementById('refreshBtn');
-            if (!sel.value) {
-                refreshBtn.style.display = 'none';
-                return;
-            }
-            // 模板切换时自动加载（显示换一批按钮）
-            refreshBtn.style.display = 'inline-block';
-            refreshBtn.textContent = '加载中...';
-            fetch('/api/douyin_tts/templates')
-                .then(r => r.json())
-                .then(data => {
-                    const text = data.templates[sel.value];
-                    if (text) {
-                        document.getElementById('douyinText').value = text;
-                        document.getElementById('douyinCharCount').textContent = text.length + ' 字';
-                        refreshBtn.textContent = '换一批 🔄';
-                    } else {
-                        refreshBtn.textContent = '换一批 🔄';
-                    }
-                })
-                .catch(() => {
-                    refreshBtn.textContent = '换一批 🔄';
-                });
         }
 
         document.getElementById('douyinText').addEventListener('input', function() {
@@ -1760,12 +1709,10 @@
         async function generateDouyinQuote() {
             const text = document.getElementById('douyinText').value.trim();
             const speed = parseFloat(document.getElementById('douyinSpeed').value);
-            const useClone = document.getElementById('douyinCloneVoice').checked;
             const resultDiv = document.getElementById('douyinResult');
-            const template = document.getElementById('douyinTemplate').value;
 
-            if (!text && !template) {
-                alert('请选择模板或输入文案内容');
+            if (!text) {
+                alert('请先输入或生成语录文案');
                 return;
             }
 
@@ -1776,7 +1723,7 @@
                 const resp = await fetch('/api/douyin_tts/synthesize', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ text, template, speed, force_cloned_voice: useClone }),
+                    body: JSON.stringify({ text, speed }),
                 });
                 const data = await resp.json();
                 if (data.error) throw new Error(data.error);
