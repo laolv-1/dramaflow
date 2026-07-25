@@ -21,7 +21,7 @@ class TTSClient:
     """Mossland TTS 客户端 - 使用 urllib 避免 requests 的 header 校验问题"""
 
     API_BASE = "https://api.mosi.cn/v1/audio"
-    DEFAULT_VOICE_ID = "cfff6856-8f17-4eaf-aed6-e1ff99d7241c"
+    DEFAULT_VOICE_ID = "06f9aa7a-654d-4821-8d67-108377968c35"  # 男声（沉稳/励志风格）
     MODEL = "moss-tts"
 
     def __init__(self, api_key: Optional[str] = None, voice_id: str = DEFAULT_VOICE_ID,
