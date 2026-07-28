@@ -1,322 +1,217 @@
-"""Short Drama Tool - CLI入口
+#!/usr/bin/env python3
+"""
+语录短视频全流程：DeepSeek 金句 → Mossland TTS → FFmpeg 竖屏视频
 
 用法:
-    python -m main.py episode 2              # 生成第2集
-    python -m main.py episode 2 --dry-run    # 预览模式（不调用API）
-    python -m main.py episode 2 --skip-image # 跳过图片生成
-    python -m main.py episode 2 --skip-video # 跳过视频生成
+    python main.py                              # 全自动一句
+    python main.py --template 扎心励志           # 指定模板
+    python main.py --text "自定义文案"           # 自定义文案
+    python main.py --skip-tts                    # 跳过配音（用已有音频）
+    python main.py --skip-image                  # 跳过图片生成（用已有茶桌图）
 """
 
 import argparse
 import asyncio
 import os
 import sys
-import json
+import subprocess
+import time
 from pathlib import Path
 
-try:
-    from dotenv import load_dotenv
-    load_dotenv()  # 自动加载 .env 文件
-except ImportError:
-    pass  # 没有python-dotenv则跳过
+# 项目根目录
+BASE_DIR = Path(__file__).parent
+sys.path.insert(0, str(BASE_DIR))
 
-# 添加项目根目录到PATH
-sys.path.insert(0, str(Path(__file__).parent))
+from tts_douyin_quote import DouyinTTS, sample_quote, QUOTE_TEMPLATES
 
-from adapters.agnes_ai import AgnesAIAdapter
-from pipeline.step_text import EpisodeParser, build_episode_info
-from pipeline.step_image import ImageGenerator
-from pipeline.step_video import VideoGenerator
-from pipeline.step_audio import AudioGenerator
-from pipeline.step_synthesize import VideoSynthesizer
-from media.utils import VirtualPathManager, OutputFileNameGenerator
+# ── 配置 ──────────────────────────────────────────────────────
+DEFAULT_VOICE_ID = "1a956cdd-d697-425e-b432-6d76a1d0b720"  # 选定男声
+TTS_SPEED = 0.9
+TTS_INSTRUCTION = "一个有力、自然的成年男声，语气沉稳坚定，略带沙哑质感，说话有力量感"
+OUTPUT_DIR = BASE_DIR / "output" / "quote_videos"
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Short Drama Tool - 云端自动化短剧工作流")
-    parser.add_argument("command", choices=["episode"], help="命令")
-    parser.add_argument("episode_num", type=int, help="集数")
-    parser.add_argument("--dry-run", action="store_true", help="预览模式，不调用API")
-    parser.add_argument("--skip-image", action="store_true", help="跳过图片生成")
-    parser.add_argument("--skip-video", action="store_true", help="跳过视频生成")
-    parser.add_argument("--skip-audio", action="store_true", help="跳过音频生成")
-    parser.add_argument("--skip-synthesize", action="store_true", help="跳过视频合成")
-    parser.add_argument("--config", type=str, default=None, help="配置文件路径")
-    parser.add_argument("--output-dir", type=str, default=None, help="输出目录")
-    parser.add_argument("--json", type=str, default=None, help="策划案JSON文件路径（覆盖 --episode）")
-    return parser.parse_args()
+# ── 工具函数 ──────────────────────────────────────────────────
+
+def find_ffmpeg() -> str:
+    candidates = [
+        "ffmpeg",
+        r"D:/Account_Forge/AI-CanvasPro/AI-CanvasPro-windows/AI CanvasPro/resources/runtime/ffmpeg/bin/ffmpeg.exe",
+        r"D:/Account_Forge/市场调研/工具/ffmpeg_temp/ffmpeg-8.1.2-essentials_build/bin/ffmpeg.exe",
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return "ffmpeg"
 
 
-def load_config(config_path: str = None) -> dict:
-    """加载配置"""
-    default_config = {
-        "api_base": "https://apihub.agnes-ai.com/v1",
-        "image_model": "agnes-image-2.1-flash",
-        "video_model": "agnes-video-v2.0",
-        "output_dir": "./output",
-        "asset_dir": "./assets",
-        "target_resolution": "1080x1920",
-        "video_duration": 5,
-        "fps": 25,
-        "narrator_voice": "zh-CN-YunyangNeural",
-        "dialogue_voice": "zh-CN-XiaoxiaoNeural",
-        "request_delay": 2,
-    }
-
-    if config_path and os.path.exists(config_path):
-        import yaml
-        with open(config_path, "r", encoding="utf-8") as f:
-            user_config = yaml.safe_load(f)
-        if user_config:
-            default_config.update(user_config)
-
-    return default_config
-
-
-def get_sample_episode_info(episode_num: int) -> dict:
-    """
-    获取示例剧集信息（用于dry-run测试）
-    实际使用时应从策划案或JSON文件加载
-    """
-    return {
-        "episode": episode_num,
-        "title": f"第{episode_num}集",
-        "characters": [
-            {
-                "name": "lin_wanqing",
-                "variant": "重生后",
-                "prompt": (
-                    "Chinese woman, early 20s, short black hair, professional black suit, "
-                    "sharp determined eyes, cold lighting, cinematic composition, "
-                    "realistic movie style, dark color tone, close-up portrait"
-                ),
-            },
-            {
-                "name": "zhao_mingxuan",
-                "variant": "反派",
-                "prompt": (
-                    "Chinese man, early 30s, wearing suit and gold-rimmed glasses, "
-                    "sinister smile, dimly lit office background, cinematic lighting, "
-                    "realistic movie style, dark color tone, medium shot"
-                ),
-            },
-            {
-                "name": "su_ting",
-                "variant": "绿茶闺蜜",
-                "prompt": (
-                    "Chinese woman, early 20s, pink outfit, sweet deceptive smile, "
-                    "soft lighting, realistic movie style, close-up portrait"
-                ),
-            },
-        ],
-        "scenes": [
-            {
-                "name": "rainy_bridge",
-                "prompt": (
-                    "Rainy night, pedestrian bridge, Chinese woman in white dress "
-                    "standing alone, heavy rain, city lights blurred in background, "
-                    "cold blue tone, cinematic wide shot, dramatic atmosphere"
-                ),
-                "video_prompt": "Slow zoom in, camera shaking slightly, rain drops visible",
-                "narration": "雨夜的天桥上，林晚晴独自一人站在栏杆边，冰冷的雨水打湿了她白色的连衣裙。",
-                "dialogues": [],
-            },
-            {
-                "name": "hospital_room",
-                "prompt": (
-                    "Hospital room, fluorescent lighting, Chinese woman waking up on hospital bed, "
-                    "confused expression, medical equipment in background, "
-                    "cold clinical tone, realistic movie style"
-                ),
-                "video_prompt": "Camera pans from ceiling to the woman's face",
-                "narration": "她在一间医院病房里惊醒，心跳如鼓，镜子里的自己竟然回到了三年前。",
-                "dialogues": [],
-            },
-            {
-                "name": "dorm_room",
-                "prompt": (
-                    "University dormitory room, warm lighting, Chinese woman looking at her phone screen, "
-                    "shocked expression on face, text messages visible on screen, "
-                    "realistic movie style, medium shot"
-                ),
-                "video_prompt": "Close up on phone screen, then pan to shocked face",
-                "narration": "手机屏幕上，是未婚夫和闺蜜的聊天记录——那些她死前从未发现的秘密。",
-                "dialogues": [
-                    {"character": "苏婷", "text": "你以为他真爱你？不过是个提款机罢了。"},
-                ],
-            },
-        ],
-    }
-
-
-async def run_pipeline(adapter: AgnesAIAdapter, episode_info: dict,
-                       vpath: VirtualPathManager, args: argparse.Namespace):
-    """执行完整流水线"""
-    episode_num = episode_info["episode"]
-    dry_run = args.dry_run
-
-    # 初始化变量
-    video_paths = []
-    all_audio = []
-
-    print(f"\n{'='*60}")
-    print(f"  Short Drama Tool - 第{episode_num}集")
-    print(f"  {'[预览模式]' if dry_run else '[执行模式]'}")
-    print(f"{'='*60}\n")
-
-    # Step 1: 生成角色图片
-    if not args.skip_image:
-        print("[Step 1/4] 生成角色图片...")
-        image_gen = ImageGenerator(adapter, vpath.resolve(vpath.images_dir).parent)
-
-        character_paths = []
-        for char in episode_info.get("characters", []):
-            if dry_run:
-                print(f"  [DRY-RUN] 将生成角色: {char['name']}")
-                print(f"  [DRY-RUN] Prompt: {char['prompt'][:60]}...")
-                character_paths.append(f"[DRY-RUN] character_{char['name']}.jpg")
-            else:
-                path = await image_gen.generate_character_image(char, episode_num)
-                character_paths.append(path)
-            await asyncio.sleep(2)  # 防限流
-
-        print()
-
-    # Step 2: 生成场景图片
-    if not args.skip_image:
-        print("[Step 2/4] 生成场景图片...")
-        image_gen = ImageGenerator(adapter, vpath.resolve(vpath.images_dir).parent)
-
-        scene_paths = {}
-        for scene in episode_info.get("scenes", []):
-            if dry_run:
-                print(f"  [DRY-RUN] 将生成场景: {scene['name']}")
-                print(f"  [DRY-RUN] Prompt: {scene['prompt'][:60]}...")
-                scene_paths[scene["name"]] = f"[DRY-RUN] scene_{scene['name']}.jpg"
-            else:
-                path = await image_gen.generate_scene_image(scene, episode_num)
-                scene_paths[scene["name"]] = path
-            await asyncio.sleep(2)  # 防限流
-
-        print()
-
-    # Step 3: 图生视频
-    if not args.skip_video:
-        print("[Step 3/4] 生成场景视频...")
-        video_gen = VideoGenerator(adapter, vpath.resolve(vpath.videos_dir).parent)
-
-        video_paths = []
-        image_map = scene_paths if not args.skip_image else {}
-        for scene in episode_info.get("scenes", []):
-            name = scene["name"]
-            if name not in image_map:
-                print(f"  [警告] 场景 '{name}' 没有对应的图片，跳过")
-                continue
-
-            if dry_run:
-                print(f"  [DRY-RUN] 将生成场景视频: {name}")
-                print(f"  [DRY-RUN] 运镜: {scene.get('video_prompt', '(无)')}")
-                video_paths.append(f"[DRY-RUN] ep{episode_num}_{name}.mp4")
-            else:
-                path = await video_gen.generate_scene_video(scene, image_map[name], episode_num)
-                video_paths.append(path)
-
-        print()
-
-    # Step 4: 生成音频
-    if not args.skip_audio:
-        print("[Step 4/4] 生成旁白和台词...")
-        audio_gen = AudioGenerator(vpath.resolve(vpath.audio_dir).parent)
-
-        audio_results = await audio_gen.generate_all_audio(
-            episode_info.get("scenes", []), episode_num
-        )
-
-        all_audio = audio_results["narration"] + audio_results["dialogue"]
-        print(f"  旁白: {len(audio_results['narration'])}段")
-        print(f"  台词: {len(audio_results['dialogue'])}段")
-        print()
-    else:
-        all_audio = []
-        print()
-
-    # Step 5: 视频合成
-    if not dry_run and not args.skip_synthesize:
-        print("[Step 5/5] 视频合成...")
-        synthesizer = VideoSynthesizer(
-            vpath.resolve(vpath.output_dir).parent,
-            target_resolution="1080x1920",
-        )
-
-        if video_paths and all_audio:
-            final = synthesizer.synthesize_episode_sync(
-                video_paths, all_audio, None, episode_num
-            )
-            print(f"\n  成品视频: {final}")
-        elif video_paths:
-            print(f"\n  [提示] 无音频，仅拼接视频")
-            print(f"  视频列表: {video_paths}")
-        else:
-            print(f"\n  [提示] 无视频或音频，跳过合成")
-    elif dry_run:
-        print("[DRY-RUN] 预览模式，跳过实际合成")
-        print(f"  预计视频数: {len(video_paths)}")
-        print(f"  预计音频数: {len(all_audio)}")
-
-    print(f"\n{'='*60}")
-    print(f"  第{episode_num}集 {'预览完成' if dry_run else '生成完成'}")
-    print(f"{'='*60}\n")
-
-
-def main():
-    args = parse_args()
-
-    # 加载配置
-    config = load_config(args.config)
-
-    # 获取API Key（优先级：环境变量 > .env文件 > config）
-    api_key = os.environ.get("AGNES_API_KEY", "")
-    if not api_key:
-        # 尝试从 .env 文件读取
-        env_path = Path(__file__).parent / ".env"
-        if env_path.exists():
-            with open(env_path, "r") as f:
+def get_moss_key() -> str:
+    key = os.environ.get("MOSS_API_KEY", "")
+    if key:
+        return key
+    for p in [BASE_DIR / "story_generator" / ".env_moss", BASE_DIR / ".env_moss"]:
+        if p.exists():
+            with open(p, encoding="utf-8") as f:
                 for line in f:
-                    if line.startswith("AGNES_API_KEY="):
-                        api_key = line.split("=", 1)[1].strip()
-                        break
-    if not api_key:
-        print("[错误] 未找到AGNES_API_KEY，请设置环境变量或在.env文件中配置")
-        sys.exit(1)
+                    line = line.strip()
+                    if line.startswith("MOSS_API_KEY="):
+                        return line.split("=", 1)[1].strip().strip("\"'")
+    return ""
 
-    # 创建虚拟路径管理器
-    base_dir = args.output_dir or config.get("output_dir", "./output")
-    vpath = VirtualPathManager(base_dir)
 
-    # 获取剧集信息（从JSON文件或默认示例）
-    if args.json:
-        from converter import convert_json_file
-        print(f"[加载] 从策划案JSON: {args.json}")
-        raw_data = convert_json_file(args.json)
-        episode_info = raw_data
-    else:
-        episode_info = get_sample_episode_info(args.episode_num)
+def get_deepseek_key() -> str:
+    key = os.environ.get("DEEPSEEK_API_KEY", "")
+    if key:
+        return key
+    env_path = BASE_DIR / ".env"
+    if env_path.exists():
+        with open(env_path, encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("DEEPSEEK_API_KEY="):
+                    return line.split("=", 1)[1].strip()
+    return ""
 
-    # 创建适配器
-    adapter = AgnesAIAdapter(api_key or "dummy-key-for-dry-run")
 
-    # 执行流水线
+# ── Step 2: 茶桌背景图（Pillow 本地生成，无API调用）────────────
+
+def generate_teatable_image() -> str:
+    """用 Pillow 生成深色茶桌背景图，1080x1920 竖屏"""
+    from PIL import Image, ImageDraw, ImageFilter
+
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    out_path = str(OUTPUT_DIR / "teatable_bg.jpg")
+
+    # 检查是否已有生成的图片
+    existing = OUTPUT_DIR / "teatable_bg.jpg"
+    if existing.exists():
+        print(f"  使用已有茶桌图: {existing}")
+        return str(existing)
+
+    print(f"  [Pillow] 生成茶桌背景图...")
+    img = Image.new("RGB", (1080, 1920), (20, 18, 15))
+    draw = ImageDraw.Draw(img)
+
+    # 茶桌椭圆桌面
+    draw.ellipse([100, 1400, 980, 1920], fill=(45, 35, 25), outline=(60, 48, 35), width=2)
+    # 茶杯
+    cx, cy = 540, 1550
+    draw.ellipse([cx - 35, cy - 30, cx + 35, cy + 30], fill=(80, 70, 55))
+    draw.ellipse([cx - 25, cy - 22, cx + 25, cy + 22], fill=(50, 42, 32))
+    draw.ellipse([cx - 20, cy - 18, cx + 20, cy + 10], fill=(120, 80, 40))
+    # 热气
+    for i in range(3):
+        sy = cy - 50 - i * 30
+        sx = cx - 10 + i * 20
+        steam = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        sd = ImageDraw.Draw(steam)
+        sd.ellipse([sx - 18 - 3 * i, sy - 12 - 2 * i, sx + 18 + 3 * i, sy + 12 + 2 * i],
+                    fill=(180, 170, 150, 20 - i * 5))
+        img = Image.alpha_composite(img.convert("RGBA"), steam).convert("RGB")
+    # 暖光渐变
+    for y in range(0, 1920, 2):
+        for x in range(0, 1080, 2):
+            d = ((x - 200) ** 2 + (y - 100) ** 2) ** 0.5
+            if d < 800:
+                f = max(0, 1 - d / 800) * 0.08
+                r, g, b = img.getpixel((x, y))
+                img.putpixel((x, y), (min(255, int(r + 255 * f)),
+                                       min(255, int(g + 230 * f)),
+                                       min(255, int(b + 180 * f))))
+    img = img.filter(ImageFilter.GaussianBlur(radius=1))
+    img.save(out_path, quality=95)
+    print(f"  茶桌图生成完成: {out_path} ({os.path.getsize(out_path) // 1024}KB)")
+    return out_path
+
+
+# ── 核心流程 ──────────────────────────────────────────────────
+
+async def step1_generate_quote(text: str = None, template: str = None) -> str:
+    if text:
+        print(f"[Step 1/3] 使用自定义文案 ({len(text)}字)")
+        return text
+    print(f"[Step 1/3] DeepSeek 生成金句...")
+    quote = sample_quote(template or "扎心励志", randomize=True)
+    print(f"  金句: {quote[:80]}...")
+    return quote
+
+
+async def step2_generate_image(skip: bool = False) -> str:
+    print(f"[Step 2/3] {'跳过生图' if skip else '生成茶桌背景图'}...")
+    return generate_teatable_image()
+
+
+def step3_generate_audio(quote: str, skip: bool = False) -> str:
+    if skip:
+        print("[Step 3/3] 跳过配音（--skip-tts）")
+        return ""
+    print(f"[Step 3/3] Mossland TTS 合成配音...")
+    print(f"  音色: {DEFAULT_VOICE_ID[:12]}... | 语速: {TTS_SPEED}x")
+    print(f"  声音描述: {TTS_INSTRUCTION}")
+
+    moss_key = get_moss_key()
+    if not moss_key:
+        print("  [错误] 未找到 MOSS_API_KEY")
+        return ""
+
+    tts = DouyinTTS(api_key=moss_key)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    ts = int(time.time())
+    audio_path = str(OUTPUT_DIR / f"quote_audio_{ts}.mp3")
     try:
-        asyncio.run(run_pipeline(adapter, episode_info, vpath, args))
-    except KeyboardInterrupt:
-        print("\n[中断] 用户取消")
-        sys.exit(1)
+        result = tts.synthesize(text=quote, output_file=audio_path,
+                                 voice_id=DEFAULT_VOICE_ID, speed=TTS_SPEED,
+                                 instruction=TTS_INSTRUCTION)
+        print(f"  配音完成: {result['file']}")
+        return result["file"]
     except Exception as e:
-        print(f"\n[错误] {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+        print(f"  [错误] TTS 失败: {e}")
+    return ""
+
+
+async def main():
+    parser = argparse.ArgumentParser(description="语录短视频全流程生成")
+    parser.add_argument("--text", help="自定义文案（不指定则用 DeepSeek 生成）")
+    parser.add_argument("--template", choices=list(QUOTE_TEMPLATES.keys()),
+                        default="扎心励志", help="语录模板（默认: 扎心励志）")
+    parser.add_argument("--skip-image", action="store_true", help="跳过图片生成")
+    parser.add_argument("--skip-tts", action="store_true", help="跳过 Mossland TTS 配音")
+    parser.add_argument("--audio", help="使用本地音频（跳过配音）")
+    args = parser.parse_args()
+
+    sep = "=" * 55
+    print(f"\n{sep}")
+    print(f"  语录短视频流水线")
+    print(f"{sep}")
+
+    quote = await step1_generate_quote(args.text, args.template)
+    image_path = generate_teatable_image() if not args.skip_image else ""
+    audio_path = args.audio or step3_generate_audio(quote, args.skip_tts)
+
+    # Step 4: FFmpeg 合成
+    if image_path and audio_path:
+        print(f"\n  [合成] 图片 + 音频 → 竖屏视频...")
+        ffmpeg = find_ffmpeg()
+        ts = int(time.time())
+        video_path = str(OUTPUT_DIR / f"quote_video_{ts}.mp4")
+        cmd = [
+            ffmpeg, "-y", "-loop", "1", "-i", image_path, "-i", audio_path,
+            "-vf", "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,format=yuv420p",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+            "-c:a", "aac", "-b:a", "192k", "-shortest", video_path,
+        ]
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
+                               encoding="utf-8", errors="replace")
+            if r.returncode == 0:
+                size_mb = os.path.getsize(video_path) / (1024 * 1024)
+                print(f"  [完成] 成品视频: {video_path} ({size_mb:.1f}MB)")
+            else:
+                print(f"  [FFmpeg错误] {r.stderr[-300:]}")
+        except Exception as e:
+            print(f"  [错误] 合成失败: {e}")
+
+    print(f"{sep}\n")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

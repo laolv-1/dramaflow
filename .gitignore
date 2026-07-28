@@ -26,5 +26,5 @@ venv/
 *.swo
 .gen_seq_state.json
 _url_index.json
-# 本地密钥文件，不提交 Git
+.claude/
 .env_moss

@@ -113,8 +113,13 @@ class DouyinTTS:
 
     # ---- public API ------------------------------------------------------
 
-    def synthesize(self, text, output_file, voice_id=None, speed=1.0):
-        """用预设或克隆音色合成 TTS 音频（moss-tts 8B 模型）"""
+    def synthesize(self, text, output_file, voice_id=None, speed=1.0, instruction=None):
+        """用预设或克隆音色合成 TTS 音频（moss-tts 8B 模型）
+
+        Args:
+            instruction: 自然语言描述声音风格（如"一个有力、自然的男声"）
+                         对应 /v1/audio/voice/generations 的 instruction 参数
+        """
         vid = voice_id or self.default_voice_id
         payload = {
             "model": self.MODEL,
@@ -122,6 +127,10 @@ class DouyinTTS:
             "voice_id": vid,
             "response_format": "mp3",
         }
+        if instruction:
+            payload["instruction"] = instruction
+        if speed:
+            payload["speed"] = speed
         raw = self._synthesize_raw(payload)
         os.makedirs(os.path.dirname(output_file) or ".", exist_ok=True)
         with open(output_file, "wb") as f:
@@ -154,14 +163,16 @@ class DouyinTTS:
 
     # ---- 高阶方法: 一键式 workflow ----------------------------------------
 
-    def make_douyin_quote(self, text, output_file="douyin_quote.mp3", speed=1.0):
+    def make_douyin_quote(self, text, output_file="douyin_quote.mp3", speed=1.0, instruction=None):
         """一键生成抖音语录音频"""
         vid = self.default_voice_id
         print(f"{'='*50}")
         print(f" 抖音语录 TTS 生成")
         print(f"{'='*50}")
         print(f"文案长度: {len(text)} chars | 语速: {speed} | 音色: {vid[:20]}...")
-        return self.synthesize(text, output_file, voice_id=vid, speed=speed)
+        if instruction:
+            print(f"声音描述: {instruction}")
+        return self.synthesize(text, output_file, voice_id=vid, speed=speed, instruction=instruction)
 
 
 # ---------------------------------------------------------------------------
