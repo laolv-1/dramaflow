@@ -12,6 +12,7 @@ import json
 import time
 import re
 import threading
+import random as rd
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify, send_from_directory,send_file
 from typing import Optional
@@ -1254,11 +1255,27 @@ def _get_douyin_mod():
     """Lazy import tts_douyin_quote module (once)"""
     global _douyin_tts_module
     if _douyin_tts_module is None:
-        from tts_douyin_quote import DouyinTTS, QUOTE_TEMPLATES, sample_quote
+        from tts_douyin_quote import (
+            DouyinTTS, QUOTE_TEMPLATES, sample_quote,
+            generate_quotes_by_dimension, _DIMENSION_LABELS, _build_quote_pool,
+        )
+        print(f"  [DEBUG] DouyinTTS default_voice_id = {DouyinTTS.DEFAULT_VOICE_ID}")
+        # 预生成语录池（Flask 启动时异步执行，不阻塞请求）
+        import threading
+        def _build_pool():
+            try:
+                _build_quote_pool(force=True)
+                print("  [QuotePool] 预生成完成")
+            except Exception as e:
+                print(f"  [QuotePool] 预生成失败: {e}")
+        threading.Thread(target=_build_pool, daemon=True).start()
         _douyin_tts_module = {
             "DouyinTTS": DouyinTTS,
             "QUOTE_TEMPLATES": QUOTE_TEMPLATES,
             "sample_quote": sample_quote,
+            "generate_quotes_by_dimension": generate_quotes_by_dimension,
+            "dim_id_labels": _DIMENSION_LABELS,
+            "_build_quote_pool": _build_quote_pool,
         }
     return _douyin_tts_module
 
@@ -1278,14 +1295,24 @@ def douyin_tts_templates():
 
 @app.route("/api/douyin_tts/randomize", methods=["POST"])
 def douyin_tts_randomize():
-    """随机获取一条语录（从所有模板中随机选）"""
-    mod = _get_douyin_mod()
-    import random
-    all_templates = list(mod["QUOTE_TEMPLATES"].keys())
-    name = random.choice(all_templates)
-    text = mod["sample_quote"](name, randomize=True)
-    return jsonify({"text": text, "length": len(text), "template": name})
-
+    """随机获取一条语录 — 从预生成池中随机选"""
+    import traceback as tb
+    try:
+        mod = _get_douyin_mod()
+        text = mod["sample_quote"]()
+        return jsonify({"text": text, "length": len(text), "generated": True})
+    except Exception as e:
+        # 写入日志文件（避免 stdout 缓冲问题）
+        with open(str(Path(__file__).parent / "randomize_error.log"), "a", encoding="utf-8") as f:
+            f.write(f"ERROR: {e}\n{tb.format_exc()}\n")
+        try:
+            mod = _get_douyin_mod()
+            all_templates = list(mod["QUOTE_TEMPLATES"].keys())
+            name = rd.choice(all_templates)
+            text = mod["sample_quote"](name, randomize=True)
+            return jsonify({"text": text, "length": len(text), "generated": False, "error_hint": str(e)[:200]})
+        except Exception as e2:
+            return jsonify({"error": str(e2)}), 500
 
 @app.route("/api/douyin_tts/synthesize", methods=["POST"])
 def douyin_tts_synthesize():
@@ -1293,7 +1320,9 @@ def douyin_tts_synthesize():
     data = request.json or {}
     text = data.get("text", "").strip()
     template = data.get("template")
-    output_name = data.get("output", "douyin_quote.mp3")
+    # 用唯一文件名避免浏览器缓存
+    ts = int(time.time())
+    output_name = f"douyin_quote_{ts}.wav"
     speed = float(data.get("speed", 0.9))
 
     if not text and not template:
@@ -1318,6 +1347,7 @@ def douyin_tts_synthesize():
         try:
             mod = _get_douyin_mod()
             tts = mod["DouyinTTS"]()
+            print(f"  [SYNTH] Voice ID: {tts.default_voice_id}")
             out_path = str(BASE_DIR / "output" / output_name)
             result = tts.make_douyin_quote(text=text, output_file=out_path, speed=speed,)
             _douyin_tasks[task_id]["status"] = "done"

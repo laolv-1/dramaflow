@@ -21,7 +21,7 @@ class TTSClient:
     """Mossland TTS 客户端 - 使用 urllib 避免 requests 的 header 校验问题"""
 
     API_BASE = "https://api.mosi.cn/v1/audio"
-    DEFAULT_VOICE_ID = "06f9aa7a-654d-4821-8d67-108377968c35"  # 男声（沉稳/励志风格）
+    DEFAULT_VOICE_ID = "fa435ac6-416a-4676-b138-a6ff8380e7cf"
     MODEL = "moss-tts"
 
     def __init__(self, api_key: Optional[str] = None, voice_id: str = DEFAULT_VOICE_ID,
@@ -43,9 +43,22 @@ class TTSClient:
         for p in config_paths:
             if os.path.exists(p):
                 with open(p, "r", encoding="utf-8") as f:
-                    key = ''.join(c for c in f.read().strip() if 32 <= ord(c) <= 126)
-                    if key:
-                        return key
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith("#") or "=" not in line:
+                            continue
+                        k, v = line.split("=", 1)
+                        if k.strip() == "MOSS_API_KEY":
+                            key = v.strip().strip("\"'")
+                            if key:
+                                return key
+                # 兼容：如果文件没有key=value格式，再试原始读取方式
+                with open(p, "r", encoding="utf-8") as f:
+                    raw = ''.join(c for c in f.read().strip() if 32 <= ord(c) <= 126)
+                    if raw and "=" not in raw:
+                        key = raw
+                        if key:
+                            return key
         for env_path in [".env", "../.env"]:
             if os.path.exists(env_path):
                 with open(env_path, "r", encoding="utf-8") as f:

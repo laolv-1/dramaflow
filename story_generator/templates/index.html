@@ -610,7 +610,7 @@
             <!-- 文案输入 -->
             <div class="form-group" style="margin-bottom:12px;">
                 <label>语录文案</label>
-                <textarea id="douyinText" rows="6" placeholder="点击下方按钮随机生成，或直接输入文案（每条40-70字，自包含对仗句）"
+                <textarea id="douyinText" rows="6" placeholder="点击下方按钮随机生成，或直接输入文案（LLM自动生成原创语录，约80-120字）"
                           style="width:100%;padding:10px 14px;background:#0f0f1a;border:1px solid #333;border-radius:8px;color:#e0e0e0;font-size:14px;resize:vertical;font-family:inherit;"></textarea>
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
                     <span id="douyinCharCount" style="color:#666;font-size:12px;">0 字</span>
@@ -1694,11 +1694,14 @@
                     body: JSON.stringify({ template: '扎心励志' }),
                 });
                 const data = await resp.json();
+                console.log('[randomize] response:', data);
                 if (data.error) throw new Error(data.error);
                 document.getElementById('douyinText').value = data.text;
                 document.getElementById('douyinCharCount').textContent = data.length + ' 字';
+                console.log('[randomize] text inserted:', data.text?.substring(0, 30));
             } catch (e) {
                 alert('刷新失败: ' + e.message);
+                console.error('[randomize] error:', e);
             }
         }
 
@@ -1751,7 +1754,7 @@
                         resultDiv.innerHTML = `
                             <div style="text-align:center;">
                                 <p style="color:#51cf66;font-size:14px;margin-bottom:8px;">✓ 合成完成</p>
-                                <audio controls autoplay style="width:100%;margin-bottom:8px;"><source src="${audioUrl}" type="audio/mpeg">您的浏览器不支持音频播放</audio>
+                                <audio controls autoplay style="width:100%;margin-bottom:8px;"><source src="${audioUrl}" type="audio/wav">您的浏览器不支持音频播放</audio>
                                 <div style="display:flex;justify-content:center;gap:10px;margin-top:8px;">
                                     <a href="${audioUrl}" download="${r.filename}" style="color:#74c0fc;font-size:12px;text-decoration:none;padding:4px 12px;border:1px solid #44444;border-radius:4px;">下载音频</a>
                                 </div>
